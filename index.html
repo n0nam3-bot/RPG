@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>THE WARDEN'S DEPTH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+  <!-- ===== AGE GATE ===== -->
+  <div id="age-gate">
+    <div class="age-gate-panel">
+      <h1>THE WARDEN'S DEPTH</h1>
+      <p class="age-gate-sub">A dark descent. Viewer discretion advised.</p>
+      <p class="age-gate-text">
+        This game contains stylized violence, psychological horror themes,
+        and a sanity/corruption system reflecting peril and distress.
+        You must confirm you are <strong>18 years of age or older</strong> to continue.
+      </p>
+      <div class="age-gate-buttons">
+        <button id="age-confirm">I am 18+ — Enter</button>
+        <button id="age-deny">Leave</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CANVAS ===== -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- ===== SCREEN FX OVERLAY (corruption vignette / chromatic drift) ===== -->
+  <div id="fx-overlay"></div>
+
+  <!-- ===== HUD ===== -->
+  <div id="hud" class="hidden">
+    <div class="hud-top-left">
+      <div class="bar-group">
+        <div class="bar-label">VITALITY</div>
+        <div class="bar health-bar"><div class="bar-fill" id="health-fill"></div></div>
+      </div>
+      <div class="bar-group">
+        <div class="bar-label">STAMINA</div>
+        <div class="bar stamina-bar"><div class="bar-fill" id="stamina-fill"></div></div>
+      </div>
+      <div class="bar-group">
+        <div class="bar-label">SANITY</div>
+        <div class="bar sanity-bar"><div class="bar-fill" id="sanity-fill"></div></div>
+      </div>
+      <div class="bar-group">
+        <div class="bar-label">CORRUPTION</div>
+        <div class="bar corruption-bar"><div class="bar-fill" id="corruption-fill"></div></div>
+      </div>
+      <div class="armor-readout" id="armor-readout">ARMOR: INTACT</div>
+    </div>
+
+    <div class="hud-top-right" id="boss-hud" style="display:none;">
+      <div class="boss-name" id="boss-name">THE WARDEN</div>
+      <div class="bar boss-bar"><div class="bar-fill" id="boss-fill"></div></div>
+    </div>
+
+    <div class="hud-center-msg" id="center-msg"></div>
+
+    <div class="hud-bottom-left" id="lock-reticle" style="display:none;">◆</div>
+
+    <!-- Touch controls, shown only on touch devices -->
+    <div id="touch-controls" class="hidden">
+      <div id="joystick-zone">
+        <div id="joystick-base"><div id="joystick-knob"></div></div>
+      </div>
+      <div id="touch-buttons">
+        <button id="btn-dodge" class="touch-btn">DODGE</button>
+        <button id="btn-attack" class="touch-btn primary">ATTACK</button>
+        <button id="btn-lock" class="touch-btn">LOCK</button>
+      </div>
+    </div>
+
+    <div class="hud-hint" id="hud-hint"></div>
+  </div>
+
+  <!-- ===== END SCREENS ===== -->
+  <div id="end-screen" class="hidden">
+    <div class="end-panel">
+      <h1 id="end-title">YOU DIED</h1>
+      <p id="end-subtitle"></p>
+      <div id="end-stats"></div>
+      <button id="restart-btn">Descend Again</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
