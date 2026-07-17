@@ -1,7 +1,8 @@
 // Floor 1 enemy roster.
-// grabChance = probability a landed attack becomes a heavy "vulnerable" grab
-// (high damage, brief stun, extra sanity loss) instead of a normal hit —
-// mirrors souls-like heavy-attack telegraphs rather than any scripted event.
+// grabChance = probability a landed attack becomes a heavy grab/slam instead
+// of a normal hit — a harder-hitting, longer-telegraphed unblockable move
+// (big damage, stagger, extra sanity loss) that rewards dodging through the
+// telegraph, same as a Bloodborne/Elden Ring grab attack.
 
 export const DUNGEON_BRUTE = {
   name: 'Dungeon Brute',
@@ -52,6 +53,11 @@ export const THE_WARDEN = {
   recoverTime: 0.7,
   staggerThreshold: 5,
   color: 0x2a1015,
+  hasSlam: true,
+  slamRadius: 4.5,
+  slamDamage: 30,
+  slamWindupTime: 1.6,
+  slamChance: 0.22,
 };
 
 export const FLOOR1_ROSTER = [
