@@ -20,7 +20,7 @@ export class UI {
     this.sanityFill.style.width = `${(player.sanity / player.maxSanity) * 100}%`;
     this.corruptionFill.style.width = `${player.corruption}%`;
     this.armorReadout.textContent = `ARMOR: ${player.armorLabel}`;
-    this.armorReadout.style.color = player.exposed ? '#c14a72' : '#b8974f';
+    this.armorReadout.style.color = player.armorBroken ? '#c14a72' : '#b8974f';
   }
 
   updateBoss(enemy) {

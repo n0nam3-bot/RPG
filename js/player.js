@@ -18,9 +18,9 @@ export class Player {
     this.sanity = 100;
     this.corruption = 0; // 0-100, only ever increases
 
-    // ===== Armor integrity: 3 (intact) -> 0 (broken/exposed) =====
+    // ===== Armor integrity: 3 (intact) -> 0 (broken, defense penalty) =====
     this.armorIntegrity = 3;
-    this.exposed = false;
+    this.armorBroken = false;
 
     // ===== Movement =====
     this.speed = 5.2;
@@ -35,6 +35,8 @@ export class Player {
     this.attackHitboxActive = false;
     this.attackCooldown = 0;
     this.dodgeCooldown = 0;
+    this.dodgeTriggeredThisFrame = false;
+    this.attackTriggeredThisFrame = false;
 
     this.alive = true;
   }
@@ -92,16 +94,16 @@ export class Player {
     let sanityLoss = isGrab ? 18 : 8;
 
     if (this.armorIntegrity > 0) {
-      // Armor absorbs some damage, then breaks a step
+      // Armor absorbs some damage, then degrades a step (dents/scuffs, defense drops)
       dmg *= 0.6;
       this.armorIntegrity -= 1;
       this._updatePlateVisibility();
       if (this.armorIntegrity === 0) {
-        this.exposed = true;
-        sanityLoss += 10; // shock of full armor loss
+        this.armorBroken = true;
+        sanityLoss += 10; // losing your last defense is rattling
       }
     } else {
-      // Exposed: full damage, extra sanity drain
+      // Armor broken: full damage, extra sanity drain — pure difficulty penalty
       sanityLoss += 6;
       dmg *= 1.25;
     }
@@ -140,12 +142,12 @@ export class Player {
   update(dt, input, camera) {
     if (!this.alive) return;
 
-    // Stamina regen (slower while exposed)
-    const regenRate = this.exposed ? 10 : 16;
+    // Stamina regen (slower once armor is broken)
+    const regenRate = this.armorBroken ? 10 : 16;
     this.stamina = Math.min(this.maxStamina, this.stamina + regenRate * dt);
 
-    // Passive sanity drain while exposed, slow regen otherwise when not hit recently
-    if (this.exposed) {
+    // Passive sanity drain while armor is broken, slow regen otherwise when not hit recently
+    if (this.armorBroken) {
       this.sanity = Math.max(0, this.sanity - 1.2 * dt);
     } else if (this.state === 'idle' || this.state === 'moving') {
       this.sanity = Math.min(this.maxSanity, this.sanity + 0.6 * dt);
@@ -199,6 +201,7 @@ export class Player {
       this.attackCooldown = 0.55;
       this.stamina -= 18;
       this.attackHitboxActive = true;
+      this.attackTriggeredThisFrame = true;
       setTimeout(() => { this.attackHitboxActive = false; }, 220);
     }
 
@@ -209,6 +212,7 @@ export class Player {
       this.dodgeCooldown = 0.8;
       this.stamina -= 22;
       this.invulnerable = true;
+      this.dodgeTriggeredThisFrame = true;
       setTimeout(() => { this.invulnerable = false; }, 300);
       const dodgeDir = new THREE.Vector3(Math.sin(this.facing), 0, Math.cos(this.facing));
       this.group.position.addScaledVector(dodgeDir, 3.2);
@@ -240,6 +244,15 @@ export class Player {
     if (this.armorIntegrity === 3) return 'INTACT';
     if (this.armorIntegrity === 2) return 'CRACKED';
     if (this.armorIntegrity === 1) return 'FAILING';
-    return 'BROKEN — EXPOSED';
+    return 'BROKEN';
+  }
+
+  // Rewards for a perfectly-timed dodge (see combat.js checkPerfectDodge)
+  refundStamina(amount) {
+    this.stamina = Math.min(this.maxStamina, this.stamina + amount);
+  }
+
+  gainSanity(amount) {
+    this.sanity = Math.min(this.maxSanity, this.sanity + amount);
   }
 }

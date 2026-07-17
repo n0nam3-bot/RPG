@@ -7,7 +7,7 @@ const PLAYER_ATTACK_DAMAGE = 16;
 // single attack doesn't multi-hit every frame the hitbox is active.
 const hitThisSwing = new Set();
 
-export function resolvePlayerAttacks(player, enemies, onEnemyKilled) {
+export function resolvePlayerAttacks(player, enemies, onEnemyHit) {
   if (!player.attackHitboxActive) {
     hitThisSwing.clear();
     return;
@@ -19,7 +19,7 @@ export function resolvePlayerAttacks(player, enemies, onEnemyKilled) {
     if (dist <= PLAYER_ATTACK_RADIUS) {
       hitThisSwing.add(enemy);
       enemy.takeHit(PLAYER_ATTACK_DAMAGE);
-      if (!enemy.alive && onEnemyKilled) onEnemyKilled(enemy);
+      if (onEnemyHit) onEnemyHit(enemy, !enemy.alive);
     }
   }
 }
@@ -36,4 +36,25 @@ export function findLockOnTarget(playerPos, enemies, currentTarget) {
   const idx = living.indexOf(currentTarget);
   if (idx === -1) return living[0];
   return living[(idx + 1) % living.length];
+}
+
+const PERFECT_DODGE_WINDOW = 0.28; // seconds before an attack lands
+const PERFECT_DODGE_RANGE_MULT = 1.8;
+
+// Rewards dodging just before an enemy's telegraphed attack actually lands —
+// the core souls-like "read the tell, dodge through it" skill expression.
+// Returns the enemy that was perfectly dodged, or null.
+export function checkPerfectDodge(playerPos, enemies) {
+  for (const enemy of enemies) {
+    if (!enemy.alive) continue;
+    const inWindup = enemy.state === 'windup' || enemy.state === 'grabWindup' || enemy.state === 'slamWindup';
+    if (!inWindup) continue;
+    if (enemy.stateTimer > PERFECT_DODGE_WINDOW) continue;
+
+    const range = enemy.hasSlam && enemy.state === 'slamWindup' ? enemy.slamRadius : enemy.attackRange * PERFECT_DODGE_RANGE_MULT;
+    if (enemy.distanceTo(playerPos) <= range) {
+      return enemy;
+    }
+  }
+  return null;
 }

@@ -23,6 +23,15 @@ export class Enemy {
     this.staggerThreshold = def.staggerThreshold ?? 3; // hits to stagger
     this.color = def.color;
 
+    // Optional AOE "slam" attack (named bosses) — bigger telegraph radius,
+    // bigger damage, escaped by moving/dodging out of the ring rather than
+    // just timing an i-frame.
+    this.hasSlam = !!def.hasSlam;
+    this.slamRadius = def.slamRadius ?? 4.5;
+    this.slamDamage = def.slamDamage ?? 30;
+    this.slamWindupTime = def.slamWindupTime ?? 1.6;
+    this.slamChance = def.slamChance ?? 0.3;
+
     this.group = new THREE.Group();
     this.group.position.copy(position);
     scene.add(this.group);
@@ -34,9 +43,11 @@ export class Enemy {
     this.alive = true;
     this.telegraphMesh.visible = false;
     this.pendingIsGrab = false;
+    this.pendingIsSlam = false;
 
     // Phase 2 (named bosses only)
     this.phase2Triggered = false;
+    this.justEnteredPhase2 = false; // main.js reads this once, then it self-clears
   }
 
   _buildMesh() {
@@ -97,9 +108,11 @@ export class Enemy {
     // Named bosses enter phase 2 (enrage) at 50% hp
     if (this.isNamed && !this.phase2Triggered && this.health <= this.maxHealth * 0.5) {
       this.phase2Triggered = true;
+      this.justEnteredPhase2 = true;
       this.moveSpeed *= 1.25;
       this.damage *= 1.2;
       this.windupTime *= 0.75;
+      this.slamChance *= 1.6;
       if (this.auraMesh) this.auraMesh.material.color.set(0xff3344);
     }
 
@@ -116,6 +129,15 @@ export class Enemy {
     this.state = 'dead';
     this.telegraphMesh.visible = false;
     // Simple death animation: sink + fade handled in update
+  }
+
+  // Called when the player lands a perfect dodge against this enemy's
+  // telegraphed attack — cancels the attack and opens a punish window.
+  interruptWithPerfectDodge() {
+    this.state = 'staggered';
+    this.stateTimer = 1.4;
+    this.telegraphMesh.visible = false;
+    this.hitCounter = 0;
   }
 
   update(dt, playerPos, onAttackLanded) {
@@ -137,17 +159,42 @@ export class Enemy {
       }
       case 'chase': {
         if (dist <= this.attackRange) {
-          // Decide grab vs normal attack
-          this.pendingIsGrab = Math.random() < this.grabChance;
-          this.state = this.pendingIsGrab ? 'grabWindup' : 'windup';
-          this.stateTimer = this.pendingIsGrab ? this.grabWindupTime : this.windupTime;
-          this.telegraphMesh.visible = true;
-          this.telegraphMesh.material.color.set(this.pendingIsGrab ? 0xc14a72 : 0xc23b46);
+          // Decide slam (AOE, bosses only) vs grab vs normal attack
+          if (this.hasSlam && Math.random() < this.slamChance) {
+            this.pendingIsSlam = true;
+            this.state = 'slamWindup';
+            this.stateTimer = this.slamWindupTime;
+            this.telegraphMesh.visible = true;
+            this.telegraphMesh.scale.set(this.slamRadius / 1.4, this.slamRadius / 1.4, 1);
+            this.telegraphMesh.material.color.set(0xff8a3a);
+          } else {
+            this.pendingIsGrab = Math.random() < this.grabChance;
+            this.pendingIsSlam = false;
+            this.state = this.pendingIsGrab ? 'grabWindup' : 'windup';
+            this.stateTimer = this.pendingIsGrab ? this.grabWindupTime : this.windupTime;
+            this.telegraphMesh.visible = true;
+            this.telegraphMesh.scale.set(1, 1, 1);
+            this.telegraphMesh.material.color.set(this.pendingIsGrab ? 0xc14a72 : 0xc23b46);
+          }
         } else {
           const dir = new THREE.Vector3().subVectors(playerPos, this.group.position);
           dir.y = 0; dir.normalize();
           this.group.position.addScaledVector(dir, this.moveSpeed * dt);
           this.group.rotation.y = Math.atan2(dir.x, dir.z);
+        }
+        break;
+      }
+      case 'slamWindup': {
+        this.stateTimer -= dt;
+        const pulse = 0.25 + Math.abs(Math.sin(performance.now() * 0.018)) * 0.35;
+        this.telegraphMesh.material.opacity = pulse;
+        if (this.stateTimer <= 0) {
+          this.telegraphMesh.visible = false;
+          this.state = 'attack';
+          this.stateTimer = 0.3;
+          if (this.distanceTo(playerPos) <= this.slamRadius) {
+            onAttackLanded(this.slamDamage, false, true);
+          }
         }
         break;
       }
@@ -163,7 +210,7 @@ export class Enemy {
           this.stateTimer = 0.2;
           // Resolve attack if player still in range
           if (this.distanceTo(playerPos) <= this.attackRange * 1.3) {
-            onAttackLanded(this.pendingIsGrab ? this.grabDamage : this.damage, this.pendingIsGrab);
+            onAttackLanded(this.pendingIsGrab ? this.grabDamage : this.damage, this.pendingIsGrab, false);
           }
         }
         break;
