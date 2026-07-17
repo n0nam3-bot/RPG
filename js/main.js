@@ -284,7 +284,8 @@ function loop() {
   for (const enemy of enemies) {
     enemy.update(dt, player.group.position, (dmg, isGrab, isSlam) => {
       const wasHealthy = !player.armorBroken;
-      player.takeHit(dmg, isGrab);
+      const landed = player.takeHit(dmg, isGrab);
+      if (!landed) return; // dodged/blocked by i-frames — no feedback, no damage
       audio.heavyImpact();
       triggerHitStop(isSlam ? 0.12 : (isGrab ? 0.09 : 0.05));
       triggerCamPunch(isSlam ? 1.1 : (isGrab ? 0.8 : 0.5));

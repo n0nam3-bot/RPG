@@ -43,9 +43,10 @@ export class Player {
     this.lastAttackWasHeavy = false;
 
     // ===== HP potion: charges fill from kills, drinking heals but roots you =====
-    this.potionCharges = 0;
     this.maxPotionCharges = 3;
+    this.potionCharges = this.maxPotionCharges; // start full
     this.potionHealAmount = 32;
+    this.potionSanityRestore = 20;
     this.potionTriggeredThisFrame = false;
 
     this.alive = true;
@@ -97,8 +98,10 @@ export class Player {
 
   // ===== Damage handling =====
   // isGrab = true => a landed heavy/grab telegraph (bigger, unblockable-style)
+  // Returns true if damage actually applied, false if blocked by i-frames/death
+  // — callers should only fire hit audio/shake/messages when this is true.
   takeHit(amount, isGrab = false) {
-    if (this.invulnerable || !this.alive) return;
+    if (this.invulnerable || !this.alive) return false;
 
     let dmg = amount;
     let sanityLoss = isGrab ? 18 : 8;
@@ -130,6 +133,7 @@ export class Player {
     setTimeout(() => { this.invulnerable = false; }, isGrab ? 900 : 400);
 
     if (this.health <= 0) this._die();
+    return true;
   }
 
   _applyCorruption(amount) {
@@ -257,7 +261,7 @@ export class Player {
       this.stamina -= 22;
       this.invulnerable = true;
       this.dodgeTriggeredThisFrame = true;
-      setTimeout(() => { this.invulnerable = false; }, 300);
+      setTimeout(() => { this.invulnerable = false; }, 380);
       const dodgeDir = new THREE.Vector3(Math.sin(this.facing), 0, Math.cos(this.facing));
       this.group.position.addScaledVector(dodgeDir, 3.2);
     }
@@ -268,6 +272,12 @@ export class Player {
       this.state = 'drinking';
       this.stateTimer = 1.0;
       this.health = Math.min(this.maxHealth, this.health + this.potionHealAmount);
+      this.sanity = Math.min(this.maxSanity, this.sanity + this.potionSanityRestore);
+      if (this.armorIntegrity < 3) {
+        this.armorIntegrity += 1;
+        if (this.armorIntegrity > 0) this.armorBroken = false;
+        this._updatePlateVisibility();
+      }
       this.potionTriggeredThisFrame = true;
     }
 
