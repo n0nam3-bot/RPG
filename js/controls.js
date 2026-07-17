@@ -12,6 +12,7 @@ export class InputState {
     this.attackPressed = false; // edge-triggered
     this.dodgePressed = false;  // edge-triggered
     this.lockPressed = false;   // edge-triggered
+    this.potionPressed = false; // edge-triggered
     this._keys = {};
 
     this._setupKeyboard();
@@ -24,6 +25,7 @@ export class InputState {
       this._keys[e.code] = true;
       if (e.code === 'Space') { this.dodgePressed = true; }
       if (e.code === 'KeyQ' || e.code === 'Tab') { this.lockPressed = true; e.preventDefault(); }
+      if (e.code === 'KeyE') { this.potionPressed = true; }
     });
     window.addEventListener('keyup', (e) => { this._keys[e.code] = false; });
   }
@@ -116,6 +118,7 @@ export class InputState {
     document.getElementById('btn-attack').addEventListener('touchstart', (e) => { this.attackPressed = true; e.preventDefault(); });
     document.getElementById('btn-dodge').addEventListener('touchstart', (e) => { this.dodgePressed = true; e.preventDefault(); });
     document.getElementById('btn-lock').addEventListener('touchstart', (e) => { this.lockPressed = true; e.preventDefault(); });
+    document.getElementById('btn-potion').addEventListener('touchstart', (e) => { this.potionPressed = true; e.preventDefault(); });
   }
 
   // Keyboard movement is polled (not event-based) for smoothness
@@ -136,6 +139,7 @@ export class InputState {
     this.attackPressed = false;
     this.dodgePressed = false;
     this.lockPressed = false;
+    this.potionPressed = false;
     this.lookDX = 0;
     this.lookDY = 0;
   }

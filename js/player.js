@@ -29,7 +29,7 @@ export class Player {
     this.forcedFacing = null; // set by main.js when locked onto a target
 
     // ===== Combat state =====
-    this.state = 'idle'; // idle, moving, attacking, dodging, staggered, dead
+    this.state = 'idle'; // idle, moving, attacking, dodging, staggered, drinking, dead
     this.stateTimer = 0;
     this.invulnerable = false;
     this.attackHitboxActive = false;
@@ -37,6 +37,16 @@ export class Player {
     this.dodgeCooldown = 0;
     this.dodgeTriggeredThisFrame = false;
     this.attackTriggeredThisFrame = false;
+
+    // ===== Combo: every 3rd swing lands a stronger hit =====
+    this.attackCount = 0;
+    this.lastAttackWasHeavy = false;
+
+    // ===== HP potion: charges fill from kills, drinking heals but roots you =====
+    this.potionCharges = 0;
+    this.maxPotionCharges = 3;
+    this.potionHealAmount = 32;
+    this.potionTriggeredThisFrame = false;
 
     this.alive = true;
   }
@@ -86,7 +96,7 @@ export class Player {
   }
 
   // ===== Damage handling =====
-  // isGrab = true => a "vulnerable attack" telegraph landed (heavy, unblockable-style)
+  // isGrab = true => a landed heavy/grab telegraph (bigger, unblockable-style)
   takeHit(amount, isGrab = false) {
     if (this.invulnerable || !this.alive) return;
 
@@ -126,6 +136,38 @@ export class Player {
     this.corruption = Math.min(100, this.corruption + amount);
   }
 
+  // Sanity no longer ends the run — instead it's a soft debuff curve. Low
+  // sanity makes her hit softer, move slower, and regen stamina slower.
+  // Fully separate from HP; you can survive at 0 sanity, just weakened.
+  get sanityRatio() {
+    return this.sanity / this.maxSanity;
+  }
+
+  get sanityDamageMultiplier() {
+    if (this.sanityRatio > 0.6) return 1.0;
+    if (this.sanityRatio > 0.3) return 0.85;
+    return 0.65;
+  }
+
+  get sanitySpeedMultiplier() {
+    if (this.sanityRatio > 0.6) return 1.0;
+    if (this.sanityRatio > 0.3) return 0.9;
+    return 0.75;
+  }
+
+  get sanityRegenMultiplier() {
+    if (this.sanityRatio > 0.6) return 1.0;
+    if (this.sanityRatio > 0.3) return 0.85;
+    return 0.6;
+  }
+
+  // Damage for the swing currently in flight — every 3rd swing is a heavy hit.
+  getCurrentAttackDamage() {
+    const base = 16;
+    const heavyMult = this.lastAttackWasHeavy ? 1.85 : 1.0;
+    return base * heavyMult * this.sanityDamageMultiplier;
+  }
+
   _updatePlateVisibility() {
     // Reveal fewer plates as armor integrity drops (3 -> 0)
     this.plates.forEach((p, i) => {
@@ -142,8 +184,8 @@ export class Player {
   update(dt, input, camera) {
     if (!this.alive) return;
 
-    // Stamina regen (slower once armor is broken)
-    const regenRate = this.armorBroken ? 10 : 16;
+    // Stamina regen (slower once armor is broken or sanity is low)
+    const regenRate = (this.armorBroken ? 10 : 16) * this.sanityRegenMultiplier;
     this.stamina = Math.min(this.maxStamina, this.stamina + regenRate * dt);
 
     // Passive sanity drain while armor is broken, slow regen otherwise when not hit recently
@@ -156,7 +198,7 @@ export class Player {
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
     if (this.dodgeCooldown > 0) this.dodgeCooldown -= dt;
 
-    if (this.state === 'staggered' || this.state === 'dodging' || this.state === 'attacking') {
+    if (this.state === 'staggered' || this.state === 'dodging' || this.state === 'attacking' || this.state === 'drinking') {
       this.stateTimer -= dt;
       if (this.stateTimer <= 0) {
         this.state = 'idle';
@@ -179,7 +221,7 @@ export class Player {
 
       if (move.lengthSq() > 0.001) {
         move.normalize();
-        this.group.position.addScaledVector(move, this.speed * dt);
+        this.group.position.addScaledVector(move, this.speed * this.sanitySpeedMultiplier * dt);
         const targetAngle = Math.atan2(move.x, move.z);
         this.facing = targetAngle;
         this.state = 'moving';
@@ -202,6 +244,8 @@ export class Player {
       this.stamina -= 18;
       this.attackHitboxActive = true;
       this.attackTriggeredThisFrame = true;
+      this.attackCount++;
+      this.lastAttackWasHeavy = (this.attackCount % 3 === 0);
       setTimeout(() => { this.attackHitboxActive = false; }, 220);
     }
 
@@ -218,6 +262,15 @@ export class Player {
       this.group.position.addScaledVector(dodgeDir, 3.2);
     }
 
+    // Potion input — heals but roots you in place for the drink duration
+    if (input.potionPressed && canAct && this.potionCharges > 0) {
+      this.potionCharges -= 1;
+      this.state = 'drinking';
+      this.stateTimer = 1.0;
+      this.health = Math.min(this.maxHealth, this.health + this.potionHealAmount);
+      this.potionTriggeredThisFrame = true;
+    }
+
     // Simple bob animation while moving
     if (this.state === 'moving') {
       this.bodyMesh.position.y = 1.0 + Math.sin(performance.now() * 0.012) * 0.03;
@@ -225,13 +278,21 @@ export class Player {
       this.bodyMesh.position.y = 1.0;
     }
 
-    // Weapon swing animation
+    // Weapon swing animation — heavy (every 3rd) swing arcs wider and scales up
     if (this.state === 'attacking') {
       const t = 1 - Math.max(0, this.stateTimer / 0.42);
-      this.weaponMesh.rotation.z = -1.2 + t * 2.4;
+      const arc = this.lastAttackWasHeavy ? 3.1 : 2.4;
+      const startAngle = this.lastAttackWasHeavy ? -1.5 : -1.2;
+      this.weaponMesh.rotation.z = startAngle + t * arc;
+      this.weaponMesh.scale.setScalar(this.lastAttackWasHeavy ? 1.35 : 1.0);
     } else {
       this.weaponMesh.rotation.z = 0;
+      this.weaponMesh.scale.setScalar(1.0);
     }
+  }
+
+  addPotionCharge() {
+    this.potionCharges = Math.min(this.maxPotionCharges, this.potionCharges + 1);
   }
 
   getAttackWorldPosition() {

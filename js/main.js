@@ -3,11 +3,17 @@ import { InputState, isTouchDevice } from './controls.js';
 import { Player } from './player.js';
 import { Enemy } from './enemy.js';
 import { FLOOR1_ROSTER } from './enemies/floor1.js';
+import { FLOOR2_ROSTER } from './enemies/floor2.js';
+import { FLOOR3_ROSTER } from './enemies/floor3.js';
 import { buildDungeon } from './dungeon.js';
 import { SanityFX } from './sanity.js';
 import { UI } from './ui.js';
 import { resolvePlayerAttacks, findLockOnTarget, checkPerfectDodge } from './combat.js';
 import { Audio } from './audio.js';
+
+const FLOORS = [FLOOR1_ROSTER, FLOOR2_ROSTER, FLOOR3_ROSTER];
+const GATE_POSITION = { x: 0, z: -21 };
+const PLAYER_START = { x: 0, z: 8 };
 
 // ================= Age gate =================
 const ageGate = document.getElementById('age-gate');
@@ -28,8 +34,10 @@ let player, ui, sanityFX, input, dungeon;
 let enemies = [];
 let bossEnemy = null;
 let lockedTarget = null;
-let camYaw = 0, camPitch = 0.35;
-const camDistance = 6.5;
+let currentFloor = 0; // index into FLOORS
+let camYaw = 0, camPitch = 0.12;
+const camDistance = 4.1;      // Marvel Rivals-style: closer, over-the-shoulder
+const shoulderOffset = 0.85;   // lateral shift so the character isn't dead-center
 let gameOver = false;
 let gameWon = false;
 
@@ -37,7 +45,6 @@ let gameWon = false;
 let hitStopTimer = 0;   // when > 0, time is heavily slowed (impact freeze-frame)
 let slowMoTimer = 0;     // when > 0, time is gently slowed (perfect-dodge bullet-time)
 let camPunch = 0;         // extra inward camera pull that decays each frame
-let lastPerfectDodgeTime = -99;
 
 function triggerHitStop(duration) { hitStopTimer = Math.max(hitStopTimer, duration); }
 function triggerSlowMo(duration) { slowMoTimer = Math.max(slowMoTimer, duration); }
@@ -45,7 +52,7 @@ function triggerCamPunch(amount) { camPunch = Math.max(camPunch, amount); }
 
 function initScene() {
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
 
   renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -69,16 +76,12 @@ function startGame() {
   sanityFX = new SanityFX(scene);
   input = new InputState();
 
-  enemies = FLOOR1_ROSTER.map(entry => {
-    const pos = new THREE.Vector3(...entry.position);
-    const e = new Enemy(scene, entry.def, pos);
-    if (entry.isBoss) bossEnemy = e;
-    return e;
-  });
+  currentFloor = 0;
+  spawnFloor(0, false);
 
   ui.setHint(isTouchDevice
-    ? 'Drag left stick to move · drag screen to look · ATTACK / DODGE / LOCK'
-    : 'WASD move · mouse look (click to lock cursor) · Click attack · Space dodge · Q lock-on');
+    ? 'Drag left stick to move · drag screen to look · ATTACK / DODGE / LOCK / FLASK'
+    : 'WASD move · mouse look (click to lock cursor) · Click attack · Space dodge · Q lock-on · E flask');
 
   ui.showMessage('THE WARDEN\u2019S DEPTH', 2600);
 
@@ -89,19 +92,46 @@ function startGame() {
   requestAnimationFrame(loop);
 }
 
-// ================= Camera rig =================
+// Spawns a floor's roster, clearing whatever was there before. If
+// resetPlayer is true, the player is walked back to the entrance (used on
+// floor transitions, not the very first spawn).
+function spawnFloor(floorIndex, resetPlayer) {
+  for (const enemy of enemies) {
+    scene.remove(enemy.group);
+  }
+  enemies = [];
+  bossEnemy = null;
+  lockedTarget = null;
+
+  const roster = FLOORS[floorIndex];
+  enemies = roster.map(entry => {
+    const pos = new THREE.Vector3(...entry.position);
+    const e = new Enemy(scene, entry.def, pos);
+    if (entry.isBoss) bossEnemy = e;
+    return e;
+  });
+
+  dungeon.gateMat.emissive.set(0x000000);
+  dungeon.gateMat.emissiveIntensity = 0;
+
+  if (resetPlayer) {
+    player.group.position.set(PLAYER_START.x, 0, PLAYER_START.z);
+  }
+
+  ui.setFloor(floorIndex + 1, FLOORS.length);
+}
+
+// ================= Camera rig (over-the-shoulder, Marvel Rivals-style) =====
 function updateCamera(dt) {
   const sensitivity = isTouchDevice ? 0.0035 : 0.0028;
   camYaw -= input.lookDX * sensitivity;
   camPitch -= input.lookDY * sensitivity;
-  camPitch = Math.max(-0.15, Math.min(1.1, camPitch));
+  camPitch = Math.max(-0.2, Math.min(0.85, camPitch));
 
   if (lockedTarget && lockedTarget.alive) {
     const dx = lockedTarget.group.position.x - player.group.position.x;
     const dz = lockedTarget.group.position.z - player.group.position.z;
     const desiredYaw = Math.atan2(dx, dz);
-    // Blend toward facing the target so the fight stays framed, while still
-    // letting the player's own look input have some influence.
     let diff = desiredYaw - camYaw;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     camYaw += diff * Math.min(1, dt * 4.5);
@@ -111,29 +141,39 @@ function updateCamera(dt) {
   }
 
   const effectiveDistance = camDistance - camPunch;
-  const offsetX = Math.sin(camYaw) * Math.cos(camPitch) * effectiveDistance;
-  const offsetZ = Math.cos(camYaw) * Math.cos(camPitch) * effectiveDistance;
-  const offsetY = 1.6 + Math.sin(camPitch) * effectiveDistance;
 
-  const targetPos = player.group.position.clone().add(new THREE.Vector3(0, 1.4, 0));
-  camera.position.set(
-    player.group.position.x + offsetX,
-    targetPos.y + offsetY - effectiveDistance * 0.3,
-    player.group.position.z + offsetZ
+  const backX = Math.sin(camYaw) * Math.cos(camPitch) * effectiveDistance;
+  const backZ = Math.cos(camYaw) * Math.cos(camPitch) * effectiveDistance;
+  const backY = 1.55 + Math.sin(camPitch) * effectiveDistance;
+
+  const rightX = Math.cos(camYaw);
+  const rightZ = -Math.sin(camYaw);
+
+  const camPos = new THREE.Vector3(
+    player.group.position.x + backX + rightX * shoulderOffset,
+    backY,
+    player.group.position.z + backZ + rightZ * shoulderOffset
   );
-  camera.lookAt(targetPos);
+  camera.position.copy(camPos);
 
-  // Punch decays back to zero quickly
+  const lookTarget = player.group.position.clone().add(new THREE.Vector3(
+    1.4 + rightX * shoulderOffset * 0.5,
+    1.35,
+    rightZ * shoulderOffset * 0.5
+  ));
+  camera.lookAt(lookTarget);
+
   camPunch = Math.max(0, camPunch - dt * 6);
 }
 
 // ================= Game flow helpers =================
-function handleEnemyHit(enemy, killed) {
+function handleEnemyHit(enemy, killed, wasHeavy) {
   if (killed) {
     audio.enemyDeath();
     triggerHitStop(0.09);
     ui.showMessage(enemy.isNamed ? `${enemy.name.toUpperCase()} HAS FALLEN` : 'ENEMY SLAIN', 1800);
     if (lockedTarget === enemy) lockedTarget = null;
+    player.addPotionCharge();
 
     const anyAlive = enemies.some(e => e.alive);
     if (!anyAlive) {
@@ -143,19 +183,26 @@ function handleEnemyHit(enemy, killed) {
     }
   } else {
     audio.hitClang();
-    triggerHitStop(0.045);
-    triggerCamPunch(0.4);
+    triggerHitStop(wasHeavy ? 0.08 : 0.045);
+    triggerCamPunch(wasHeavy ? 0.7 : 0.4);
+    if (wasHeavy) ui.showMessage('HEAVY STRIKE', 900);
   }
 }
 
 function checkWinCondition() {
   const anyAlive = enemies.some(e => e.alive);
   if (!anyAlive && !gameWon) {
-    const dz = Math.abs(player.group.position.z - (-21));
-    const dx = Math.abs(player.group.position.x - 0);
+    const dz = Math.abs(player.group.position.z - GATE_POSITION.z);
+    const dx = Math.abs(player.group.position.x - GATE_POSITION.x);
     if (dz < 2 && dx < 2.5) {
-      gameWon = true;
-      endGame(true);
+      if (currentFloor < FLOORS.length - 1) {
+        currentFloor++;
+        spawnFloor(currentFloor, true);
+        ui.showMessage(`FLOOR ${currentFloor + 1}`, 2400);
+      } else {
+        gameWon = true;
+        endGame(true);
+      }
     }
   }
 }
@@ -179,6 +226,7 @@ function endGame(won) {
   }
 
   stats.innerHTML = `
+    Floor Reached: ${currentFloor + 1} / ${FLOORS.length}<br/>
     Final Sanity: ${Math.round(player.sanity)} / ${player.maxSanity}<br/>
     Corruption Accrued: ${Math.round(player.corruption)}%<br/>
     Armor Condition: ${player.armorLabel}<br/>
@@ -193,7 +241,6 @@ function loop() {
   if (gameOver) return;
   const rawDt = Math.min(clock.getDelta(), 0.05);
 
-  // Resolve time scale: hitstop (hard freeze) takes priority over slow-mo
   let dt = rawDt;
   if (hitStopTimer > 0) {
     hitStopTimer -= rawDt;
@@ -205,7 +252,6 @@ function loop() {
 
   input.pollKeyboardMove();
 
-  // Lock-on toggle
   if (input.lockPressed) {
     lockedTarget = findLockOnTarget(player.group.position, enemies, lockedTarget);
     ui.setLockOn(!!lockedTarget);
@@ -213,27 +259,29 @@ function loop() {
 
   player.update(dt, input, camera);
 
-  // Perfect dodge: check right when a dodge is triggered, against enemies
-  // about to land a telegraphed attack. Reward + interrupt on success.
   if (player.dodgeTriggeredThisFrame) {
     audio.dodgeWhoosh();
     const perfected = checkPerfectDodge(player.group.position, enemies);
     if (perfected) {
       perfected.interruptWithPerfectDodge();
-      player.refundStamina(22); // full refund of the dodge's stamina cost
+      player.refundStamina(22);
       player.gainSanity(4);
       audio.perfectChime();
       triggerSlowMo(0.35);
       ui.showMessage('PERFECT DODGE — PUNISH!', 1400);
-      lastPerfectDodgeTime = performance.now();
     }
     player.dodgeTriggeredThisFrame = false;
+  }
+
+  if (player.potionTriggeredThisFrame) {
+    audio.perfectChime();
+    ui.showMessage('DRINKING FLASK...', 1000);
+    player.potionTriggeredThisFrame = false;
   }
 
   updateCamera(dt);
 
   for (const enemy of enemies) {
-    const wasPhase2 = enemy.phase2Triggered;
     enemy.update(dt, player.group.position, (dmg, isGrab, isSlam) => {
       const wasHealthy = !player.armorBroken;
       player.takeHit(dmg, isGrab);
@@ -248,7 +296,6 @@ function loop() {
       }
     });
 
-    // React once to a boss entering phase 2
     if (enemy.justEnteredPhase2) {
       enemy.justEnteredPhase2 = false;
       audio.bossRoar();
@@ -271,16 +318,12 @@ function loop() {
 
   checkWinCondition();
 
+  // Sanity is a soft debuff curve now (see Player.sanityDamageMultiplier /
+  // sanitySpeedMultiplier / sanityRegenMultiplier) — it never ends the run.
+  // Only HP loss ends the run.
   if (!player.alive) {
     audio.playerDeath();
     endGame(false);
-  } else if (player.sanity <= 0) {
-    // Sanity fully broken: non-lethal failure state, distinct from death
-    player.alive = false;
-    audio.playerDeath();
-    endGame(false);
-    document.getElementById('end-title').textContent = 'MIND BROKEN';
-    document.getElementById('end-subtitle').textContent = 'She can no longer tell the dark from herself.';
   }
 
   input.consumeFrame();

@@ -5,6 +5,8 @@ export class UI {
     this.sanityFill = document.getElementById('sanity-fill');
     this.corruptionFill = document.getElementById('corruption-fill');
     this.armorReadout = document.getElementById('armor-readout');
+    this.potionReadout = document.getElementById('potion-readout');
+    this.floorReadout = document.getElementById('floor-readout');
     this.bossHud = document.getElementById('boss-hud');
     this.bossName = document.getElementById('boss-name');
     this.bossFill = document.getElementById('boss-fill');
@@ -21,6 +23,11 @@ export class UI {
     this.corruptionFill.style.width = `${player.corruption}%`;
     this.armorReadout.textContent = `ARMOR: ${player.armorLabel}`;
     this.armorReadout.style.color = player.armorBroken ? '#c14a72' : '#b8974f';
+    this.potionReadout.textContent = `FLASKS: ${player.potionCharges} / ${player.maxPotionCharges}`;
+  }
+
+  setFloor(current, total) {
+    this.floorReadout.textContent = `FLOOR ${current} / ${total}`;
   }
 
   updateBoss(enemy) {

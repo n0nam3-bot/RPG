@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 
 const PLAYER_ATTACK_RADIUS = 2.0;
-const PLAYER_ATTACK_DAMAGE = 16;
 
 // Tracks which enemies have already been hit during the current swing so a
 // single attack doesn't multi-hit every frame the hitbox is active.
@@ -13,13 +12,14 @@ export function resolvePlayerAttacks(player, enemies, onEnemyHit) {
     return;
   }
   const origin = player.getAttackWorldPosition();
+  const dmg = player.getCurrentAttackDamage();
   for (const enemy of enemies) {
     if (!enemy.alive || hitThisSwing.has(enemy)) continue;
     const dist = enemy.group.position.distanceTo(origin);
     if (dist <= PLAYER_ATTACK_RADIUS) {
       hitThisSwing.add(enemy);
-      enemy.takeHit(PLAYER_ATTACK_DAMAGE);
-      if (onEnemyHit) onEnemyHit(enemy, !enemy.alive);
+      enemy.takeHit(dmg);
+      if (onEnemyHit) onEnemyHit(enemy, !enemy.alive, player.lastAttackWasHeavy);
     }
   }
 }
