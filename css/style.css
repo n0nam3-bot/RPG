@@ -145,6 +145,15 @@ html, body {
   text-shadow: 0 0 8px rgba(138,114,184,0.4);
 }
 
+.ember-readout {
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: var(--amber-bright);
+  text-shadow: 0 0 8px rgba(212,160,79,0.4);
+}
+
 .hud-top-center {
   position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
   font-family: var(--font-display);
@@ -218,29 +227,36 @@ html, body {
   transform: translate(-50%, -50%);
 }
 #touch-buttons {
-  position: absolute; bottom: 30px; right: 24px;
-  display: flex; align-items: flex-end; gap: 12px;
+  position: absolute; bottom: 24px; right: 16px;
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: flex-end;
+  gap: 8px; width: 210px;
   pointer-events: auto;
 }
 .touch-btn {
   font-family: var(--font-display);
-  font-size: 0.65rem; letter-spacing: 0.05em;
-  width: 66px; height: 66px; border-radius: 50%;
+  font-size: 0.6rem; letter-spacing: 0.04em;
+  width: 56px; height: 56px; border-radius: 50%;
   background: rgba(20,18,26,0.6);
   border: 1px solid var(--panel-border);
   color: var(--bone);
 }
 .touch-btn.primary {
-  width: 80px; height: 80px;
+  width: 68px; height: 68px;
   border-color: var(--blood-bright);
   color: var(--blood-bright);
   background: rgba(138,31,43,0.18);
 }
 .touch-btn.potion {
-  width: 56px; height: 56px;
+  width: 48px; height: 48px;
   border-color: var(--violet-bright);
   color: var(--violet-bright);
   background: rgba(91,74,122,0.18);
+}
+.touch-btn.block {
+  width: 52px; height: 52px;
+  border-color: var(--bone);
+  color: var(--bone);
+  background: rgba(205,196,176,0.12);
 }
 
 /* ===== END SCREEN ===== */
@@ -269,6 +285,55 @@ html, body {
   cursor: pointer;
 }
 #restart-btn:hover { background: rgba(184,151,79,0.1); }
+
+/* ===== UPGRADE SHRINE ===== */
+#upgrade-modal {
+  position: fixed; inset: 0; z-index: 95;
+  background: radial-gradient(ellipse at center, #16121c 0%, var(--void) 82%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.upgrade-panel { text-align: center; max-width: 720px; width: 100%; }
+.upgrade-panel h2 {
+  font-family: var(--font-display);
+  font-size: 1.6rem; letter-spacing: 0.2em;
+  color: var(--gold);
+  text-shadow: 0 0 24px rgba(184,151,79,0.5);
+  margin-bottom: 6px;
+}
+.upgrade-sub {
+  color: var(--bone-dim);
+  font-style: italic;
+  margin-bottom: 28px;
+}
+#upgrade-choices {
+  display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+}
+.upgrade-choice-btn {
+  flex: 1 1 200px; max-width: 220px;
+  background: linear-gradient(180deg, rgba(20,18,26,0.9), rgba(10,9,13,0.95));
+  border: 1px solid var(--panel-border);
+  padding: 22px 16px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s, transform 0.15s;
+}
+.upgrade-choice-btn:hover {
+  border-color: var(--gold);
+  transform: translateY(-3px);
+}
+.upgrade-choice-name {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.upgrade-choice-desc {
+  font-size: 0.85rem;
+  color: var(--bone-dim);
+  line-height: 1.4;
+}
 
 @media (max-width: 600px) {
   .hud-top-left { width: 170px; }
