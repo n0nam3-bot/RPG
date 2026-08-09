@@ -63,6 +63,7 @@
       </div>
       <div class="armor-readout" id="armor-readout">ARMOR: INTACT</div>
       <div class="potion-readout" id="potion-readout">FLASKS: 0 / 3</div>
+      <div class="ember-readout" id="ember-readout">EMBERS: 0</div>
     </div>
 
     <div class="hud-top-center" id="floor-readout">FLOOR 1</div>
@@ -82,6 +83,7 @@
         <div id="joystick-base"><div id="joystick-knob"></div></div>
       </div>
       <div id="touch-buttons">
+        <button id="btn-block" class="touch-btn block">BLOCK</button>
         <button id="btn-dodge" class="touch-btn">DODGE</button>
         <button id="btn-attack" class="touch-btn primary">ATTACK</button>
         <button id="btn-lock" class="touch-btn">LOCK</button>
@@ -90,6 +92,15 @@
     </div>
 
     <div class="hud-hint" id="hud-hint"></div>
+  </div>
+
+  <!-- ===== UPGRADE SHRINE (between floors) ===== -->
+  <div id="upgrade-modal" class="hidden">
+    <div class="upgrade-panel">
+      <h2>FLOOR CLEARED</h2>
+      <p class="upgrade-sub">Choose a boon before you descend</p>
+      <div id="upgrade-choices"></div>
+    </div>
   </div>
 
   <!-- ===== END SCREENS ===== -->
