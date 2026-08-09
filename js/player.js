@@ -49,6 +49,19 @@ export class Player {
     this.potionSanityRestore = 20;
     this.potionTriggeredThisFrame = false;
 
+    // ===== Block: held defensive stance, distinct from dodge. Reduces
+    // normal-hit damage a lot, drains stamina while active, can't stop
+    // grab/slam attacks (those still require a dodge). =====
+    this.blocking = false;
+    this.blockDamageReduction = 0.65;
+    this.blockStaminaDrainPerSec = 22;
+
+    // ===== Progression: embers dropped by enemies, spent at floor-clear
+    // upgrade shrines. Upgrades apply as flat/multiplicative stat boosts. =====
+    this.embers = 0;
+    this.damageMult = 1.0;
+    this.moveSpeedMult = 1.0;
+
     this.alive = true;
   }
 
@@ -98,15 +111,24 @@ export class Player {
 
   // ===== Damage handling =====
   // isGrab = true => a landed heavy/grab telegraph (bigger, unblockable-style)
-  // Returns true if damage actually applied, false if blocked by i-frames/death
-  // — callers should only fire hit audio/shake/messages when this is true.
+  // Returns { landed, blocked }. landed=false means i-frames/death absorbed
+  // it entirely (no feedback should fire). blocked=true means it connected
+  // but was mitigated by a raised guard (different feedback than a raw hit).
   takeHit(amount, isGrab = false) {
-    if (this.invulnerable || !this.alive) return false;
+    if (this.invulnerable || !this.alive) return { landed: false, blocked: false };
 
     let dmg = amount;
     let sanityLoss = isGrab ? 18 : 8;
 
-    if (this.armorIntegrity > 0) {
+    // Blocking cuts normal-hit damage a lot; grab/slam attacks punch through
+    // a raised guard by design, so dodging is still required for those.
+    const blockedThisHit = this.blocking && !isGrab;
+    if (blockedThisHit) {
+      dmg *= (1 - this.blockDamageReduction);
+      sanityLoss *= 0.4;
+    }
+
+    if (this.armorIntegrity > 0 && !blockedThisHit) {
       // Armor absorbs some damage, then degrades a step (dents/scuffs, defense drops)
       dmg *= 0.6;
       this.armorIntegrity -= 1;
@@ -115,7 +137,7 @@ export class Player {
         this.armorBroken = true;
         sanityLoss += 10; // losing your last defense is rattling
       }
-    } else {
+    } else if (!blockedThisHit) {
       // Armor broken: full damage, extra sanity drain — pure difficulty penalty
       sanityLoss += 6;
       dmg *= 1.25;
@@ -127,13 +149,19 @@ export class Player {
     this.sanity = Math.max(0, this.sanity - sanityLoss);
     this._applyCorruption(sanityLoss * 0.4);
 
-    this.state = 'staggered';
-    this.stateTimer = isGrab ? 1.1 : 0.5;
-    this.invulnerable = true;
-    setTimeout(() => { this.invulnerable = false; }, isGrab ? 900 : 400);
+    if (blockedThisHit) {
+      // Absorbed by the guard — no stagger, no i-frames, just chip damage
+      // and stamina cost. Lets you hold block through multiple hits.
+      this.stamina = Math.max(0, this.stamina - 12);
+    } else {
+      this.state = 'staggered';
+      this.stateTimer = isGrab ? 1.1 : 0.5;
+      this.invulnerable = true;
+      setTimeout(() => { this.invulnerable = false; }, isGrab ? 900 : 400);
+    }
 
     if (this.health <= 0) this._die();
-    return true;
+    return { landed: true, blocked: blockedThisHit };
   }
 
   _applyCorruption(amount) {
@@ -169,7 +197,7 @@ export class Player {
   getCurrentAttackDamage() {
     const base = 16;
     const heavyMult = this.lastAttackWasHeavy ? 1.85 : 1.0;
-    return base * heavyMult * this.sanityDamageMultiplier;
+    return base * heavyMult * this.sanityDamageMultiplier * this.damageMult;
   }
 
   _updatePlateVisibility() {
@@ -210,10 +238,25 @@ export class Player {
       }
     }
 
-    const canAct = this.state === 'idle' || this.state === 'moving';
+    // Block: held stance, entered/exited freely from idle/moving/blocking.
+    // Auto-drops if stamina runs out (guard break) so it can't be free.
+    const wantsBlock = input.blockHeld && (this.state === 'idle' || this.state === 'moving' || this.state === 'blocking');
+    if (wantsBlock && this.stamina > 4) {
+      this.blocking = true;
+      this.state = 'blocking';
+      this.stamina = Math.max(0, this.stamina - this.blockStaminaDrainPerSec * dt);
+      if (this.stamina <= 0) this.blocking = false; // guard break, block drops next frame
+    } else {
+      this.blocking = false;
+      if (this.state === 'blocking') this.state = 'idle';
+    }
 
-    // Movement (camera-relative)
-    if (canAct) {
+    const canAct = this.state === 'idle' || this.state === 'moving';
+    const canMove = canAct || this.state === 'blocking';
+    const canDodge = canAct || this.state === 'blocking';
+
+    // Movement (camera-relative) — allowed while blocking too, just slower
+    if (canMove) {
       const camDir = new THREE.Vector3();
       camera.getWorldDirection(camDir);
       camDir.y = 0; camDir.normalize();
@@ -223,12 +266,14 @@ export class Player {
       move.addScaledVector(camDir, input.moveY);
       move.addScaledVector(camRight, input.moveX);
 
+      const speedMult = this.sanitySpeedMultiplier * this.moveSpeedMult * (this.blocking ? 0.5 : 1);
+
       if (move.lengthSq() > 0.001) {
         move.normalize();
-        this.group.position.addScaledVector(move, this.speed * this.sanitySpeedMultiplier * dt);
+        this.group.position.addScaledVector(move, this.speed * speedMult * dt);
         const targetAngle = Math.atan2(move.x, move.z);
         this.facing = targetAngle;
-        this.state = 'moving';
+        if (this.state !== 'blocking') this.state = 'moving';
       } else if (this.state === 'moving') {
         this.state = 'idle';
       }
@@ -253,8 +298,9 @@ export class Player {
       setTimeout(() => { this.attackHitboxActive = false; }, 220);
     }
 
-    // Dodge input
-    if (input.dodgePressed && canAct && this.dodgeCooldown <= 0 && this.stamina >= 22) {
+    // Dodge input — also usable straight out of a block to cancel the guard
+    if (input.dodgePressed && canDodge && this.dodgeCooldown <= 0 && this.stamina >= 22) {
+      this.blocking = false;
       this.state = 'dodging';
       this.stateTimer = 0.35;
       this.dodgeCooldown = 0.8;
@@ -295,14 +341,24 @@ export class Player {
       const startAngle = this.lastAttackWasHeavy ? -1.5 : -1.2;
       this.weaponMesh.rotation.z = startAngle + t * arc;
       this.weaponMesh.scale.setScalar(this.lastAttackWasHeavy ? 1.35 : 1.0);
+    } else if (this.state === 'blocking') {
+      // Raised guard pose: blade held vertical, angled slightly forward
+      this.weaponMesh.rotation.z = -1.65;
+      this.weaponMesh.rotation.x = -0.3;
+      this.weaponMesh.scale.setScalar(1.0);
     } else {
       this.weaponMesh.rotation.z = 0;
+      this.weaponMesh.rotation.x = 0;
       this.weaponMesh.scale.setScalar(1.0);
     }
   }
 
   addPotionCharge() {
     this.potionCharges = Math.min(this.maxPotionCharges, this.potionCharges + 1);
+  }
+
+  addEmbers(amount) {
+    this.embers += amount;
   }
 
   getAttackWorldPosition() {

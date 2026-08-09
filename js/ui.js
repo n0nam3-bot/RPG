@@ -6,6 +6,7 @@ export class UI {
     this.corruptionFill = document.getElementById('corruption-fill');
     this.armorReadout = document.getElementById('armor-readout');
     this.potionReadout = document.getElementById('potion-readout');
+    this.emberReadout = document.getElementById('ember-readout');
     this.floorReadout = document.getElementById('floor-readout');
     this.bossHud = document.getElementById('boss-hud');
     this.bossName = document.getElementById('boss-name');
@@ -13,6 +14,8 @@ export class UI {
     this.centerMsg = document.getElementById('center-msg');
     this.lockReticle = document.getElementById('lock-reticle');
     this.hint = document.getElementById('hud-hint');
+    this.upgradeModal = document.getElementById('upgrade-modal');
+    this.upgradeChoicesEl = document.getElementById('upgrade-choices');
     this._msgTimeout = null;
   }
 
@@ -24,6 +27,25 @@ export class UI {
     this.armorReadout.textContent = `ARMOR: ${player.armorLabel}`;
     this.armorReadout.style.color = player.armorBroken ? '#c14a72' : '#b8974f';
     this.potionReadout.textContent = `FLASKS: ${player.potionCharges} / ${player.maxPotionCharges}`;
+    this.emberReadout.textContent = `EMBERS: ${player.embers}`;
+  }
+
+  // Renders the floor-clear upgrade shrine. onPick(choice) fires when the
+  // player clicks/taps a card; caller is responsible for hiding the modal.
+  showUpgradeChoices(choices, onPick) {
+    this.upgradeChoicesEl.innerHTML = '';
+    for (const choice of choices) {
+      const btn = document.createElement('button');
+      btn.className = 'upgrade-choice-btn';
+      btn.innerHTML = `<div class="upgrade-choice-name">${choice.name}</div><div class="upgrade-choice-desc">${choice.desc}</div>`;
+      btn.addEventListener('click', () => onPick(choice));
+      this.upgradeChoicesEl.appendChild(btn);
+    }
+    this.upgradeModal.classList.remove('hidden');
+  }
+
+  hideUpgradeChoices() {
+    this.upgradeModal.classList.add('hidden');
   }
 
   setFloor(current, total) {

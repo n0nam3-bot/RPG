@@ -13,6 +13,7 @@ export class InputState {
     this.dodgePressed = false;  // edge-triggered
     this.lockPressed = false;   // edge-triggered
     this.potionPressed = false; // edge-triggered
+    this.blockHeld = false;     // held state, not edge-triggered
     this._keys = {};
 
     this._setupKeyboard();
@@ -39,6 +40,10 @@ export class InputState {
     });
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) this.attackPressed = true;
+      if (e.button === 2) this.blockHeld = true;
+    });
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 2) this.blockHeld = false;
     });
     document.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement === canvas) {
@@ -119,6 +124,10 @@ export class InputState {
     document.getElementById('btn-dodge').addEventListener('touchstart', (e) => { this.dodgePressed = true; e.preventDefault(); });
     document.getElementById('btn-lock').addEventListener('touchstart', (e) => { this.lockPressed = true; e.preventDefault(); });
     document.getElementById('btn-potion').addEventListener('touchstart', (e) => { this.potionPressed = true; e.preventDefault(); });
+
+    const blockBtn = document.getElementById('btn-block');
+    blockBtn.addEventListener('touchstart', (e) => { this.blockHeld = true; e.preventDefault(); });
+    blockBtn.addEventListener('touchend', (e) => { this.blockHeld = false; e.preventDefault(); });
   }
 
   // Keyboard movement is polled (not event-based) for smoothness

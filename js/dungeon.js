@@ -1,5 +1,13 @@
 import * as THREE from 'three';
 
+// Per-floor visual themes: torch color, fog base color, ground tint —
+// gives each floor a distinct identity without needing new geometry.
+const FLOOR_THEMES = [
+  { torch: 0xc9793a, fog: 0x0a0810, ground: 0x1a1620, name: 'The Warden\u2019s Depth' },
+  { torch: 0xb84a2a, fog: 0x140808, ground: 0x201414, name: 'The Rust Hollow' },
+  { torch: 0x4a6ab8, fog: 0x05070f, ground: 0x121620, name: 'The Cold Sanctum' },
+];
+
 export function buildDungeon(scene) {
   // Dark moody fog
   scene.fog = new THREE.FogExp2(0x0a0810, 0.045);
@@ -15,10 +23,12 @@ export function buildDungeon(scene) {
   const torchPositions = [
     [0, 3, 4], [-8, 3, -4], [8, 3, -4], [0, 3, -16], [-4, 3, -10], [4, 3, -10],
   ];
+  const torches = [];
   for (const [x, y, z] of torchPositions) {
     const torch = new THREE.PointLight(0xc9793a, 6, 12, 2);
     torch.position.set(x, y, z);
     scene.add(torch);
+    torches.push(torch);
   }
 
   // Ground
@@ -60,5 +70,18 @@ export function buildDungeon(scene) {
   gate.position.set(0, 2.5, -21);
   scene.add(gate);
 
-  return { walls, gate, gateMat };
+  return { walls, gate, gateMat, torches, groundMat };
+}
+
+// Re-tints an already-built dungeon for a given floor index (0-based).
+// Cheap way to give each floor a distinct mood without rebuilding geometry.
+export function applyFloorTheme(scene, dungeonRefs, floorIndex) {
+  const theme = FLOOR_THEMES[floorIndex] ?? FLOOR_THEMES[FLOOR_THEMES.length - 1];
+  for (const torch of dungeonRefs.torches) {
+    torch.color.set(theme.torch);
+  }
+  dungeonRefs.groundMat.color.set(theme.ground);
+  if (scene.fog) scene.fog.color.set(theme.fog);
+  scene.background.set(theme.fog);
+  return theme.name;
 }

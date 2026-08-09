@@ -32,6 +32,14 @@ export class Enemy {
     this.slamWindupTime = def.slamWindupTime ?? 1.6;
     this.slamChance = def.slamChance ?? 0.3;
 
+    // Optional combo chain (fast enemies) — after a normal attack, a chance
+    // to immediately chain into a second, quicker swing instead of
+    // recovering. Capped at one chain per engagement so it stays readable.
+    this.canCombo = !!def.canCombo;
+    this.comboChance = def.comboChance ?? 0.5;
+    this.comboWindupTime = def.comboWindupTime ?? (def.windupTime * 0.6);
+    this.hasChainedThisEngagement = false;
+
     this.group = new THREE.Group();
     this.group.position.copy(position);
     scene.add(this.group);
@@ -154,7 +162,10 @@ export class Enemy {
 
     switch (this.state) {
       case 'idle': {
-        if (dist < this.detectRadius) this.state = 'chase';
+        if (dist < this.detectRadius) {
+          this.state = 'chase';
+          this.hasChainedThisEngagement = false;
+        }
         break;
       }
       case 'chase': {
@@ -218,8 +229,21 @@ export class Enemy {
       case 'attack': {
         this.stateTimer -= dt;
         if (this.stateTimer <= 0) {
-          this.state = 'recover';
-          this.stateTimer = this.recoverTime;
+          const canChainNow = this.canCombo && !this.hasChainedThisEngagement
+            && !this.pendingIsSlam && !this.pendingIsGrab
+            && this.distanceTo(playerPos) <= this.attackRange * 1.4
+            && Math.random() < this.comboChance;
+          if (canChainNow) {
+            this.hasChainedThisEngagement = true;
+            this.state = 'windup';
+            this.stateTimer = this.comboWindupTime;
+            this.telegraphMesh.visible = true;
+            this.telegraphMesh.scale.set(1, 1, 1);
+            this.telegraphMesh.material.color.set(0xff6a5a); // slightly distinct tint for the chained hit
+          } else {
+            this.state = 'recover';
+            this.stateTimer = this.recoverTime;
+          }
         }
         break;
       }

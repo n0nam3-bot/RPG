@@ -18,6 +18,16 @@ export class SanityFX {
     this.shakeTime = duration;
   }
 
+  // Called on floor transitions so each floor's fog tint isn't immediately
+  // overwritten by the per-frame corruption blend below.
+  setBaseFogColor(hex) {
+    this.baseFogColor = {
+      r: (hex >> 16) & 0xff,
+      g: (hex >> 8) & 0xff,
+      b: hex & 0xff,
+    };
+  }
+
   update(dt, player, camera) {
     const sanityRatio = player.sanity / player.maxSanity; // 1 = calm, 0 = broken
     const corruptionRatio = player.corruption / 100;
