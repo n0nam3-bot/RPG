@@ -34,6 +34,9 @@ export const CHAIN_FLAGELLANT = {
   recoverTime: 0.45,
   staggerThreshold: 2,
   color: 0x5a2a3a,
+  canCombo: true,
+  comboChance: 0.55,
+  comboWindupTime: 0.3,
 };
 
 export const THE_TORMENTOR = {

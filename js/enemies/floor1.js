@@ -36,6 +36,9 @@ export const BLADE_THRALL = {
   recoverTime: 0.5,
   staggerThreshold: 2,
   color: 0x3a4a5a,
+  canCombo: true,
+  comboChance: 0.5,
+  comboWindupTime: 0.32,
 };
 
 export const THE_WARDEN = {

@@ -34,6 +34,9 @@ export const SHADOW_STALKER = {
   recoverTime: 0.4,
   staggerThreshold: 2,
   color: 0x1a1a2a,
+  canCombo: true,
+  comboChance: 0.6,
+  comboWindupTime: 0.26,
 };
 
 export const THE_HOLLOW_KING = {
