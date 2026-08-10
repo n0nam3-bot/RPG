@@ -1,150 +1,117 @@
-# The Warden's Depth — Souls-like Browser Prototype
+# Depth Arena — 3D Arcade Fighter
 
-A single-floor 3D souls-like built with Three.js. Runs entirely client-side —
-no build step, no server — so it works straight from GitHub Pages on desktop
-or mobile browsers.
+A Power Stone / Naruto Storm-style 3D arena fighter: free movement in a
+round arena, a camera that dynamically frames both fighters, and a
+best-of-3 arcade ladder against 7 AI opponents. Runs entirely client-side —
+no build step, no server — so it works straight from GitHub Pages on
+desktop or mobile browsers.
 
-## File paths (upload exactly this structure to your repo root)
+This **replaces** the earlier souls-like dungeon-crawl build in the same
+repo. See "Cleaning up your repo" below for exactly what to delete.
+
+## File paths (upload to your repo root, same structure as before)
 
 ```
 index.html
 css/style.css
 js/main.js
 js/controls.js
+js/fighter.js
+js/ai.js
+js/roster.js
+js/arena.js
+js/ui.js
+js/combat.js
+js/audio.js
+```
+
+## Cleaning up your repo
+
+The dungeon-crawl build used some files that this fighting-game build does
+**not** use anymore. `index.html`, `css/style.css`, `js/main.js`,
+`js/controls.js`, `js/ui.js`, `js/combat.js`, and `js/audio.js` all still
+exist but have **entirely new content** — just overwrite them. These old
+files are no longer referenced by anything and should be **deleted** from
+your repo:
+
+```
 js/player.js
 js/enemy.js
 js/dungeon.js
 js/sanity.js
-js/ui.js
-js/combat.js
-js/audio.js
 js/enemies/floor1.js
 js/enemies/floor2.js
 js/enemies/floor3.js
 ```
 
+(The `js/enemies/` folder can go entirely once those three files are gone.)
+
 ## Deploying to GitHub Pages
 
-1. Create a new repo (or use an existing one).
-2. Upload all the files above, preserving the folder structure exactly
-   (`css/`, `js/`, `js/enemies/`).
-3. In the repo: **Settings → Pages → Source → Deploy from branch → main → / (root)**.
-4. Your game will be live at `https://<username>.github.io/<repo-name>/`.
+1. In your existing repo, delete the files listed above.
+2. Upload/overwrite with the files in this package, preserving the folder
+   structure (`css/`, `js/`).
+3. Settings → Pages should already be configured from before — no changes
+   needed there. Give it a minute and refresh.
 
-No build tools, npm install, or bundler needed — `index.html` pulls Three.js
-straight from a CDN via an import map.
+## What's implemented
 
-## What's implemented in this prototype
-
-- **Over-the-shoulder third-person camera** (Marvel Rivals-style: closer to
-  the character, lateral shoulder offset rather than dead-center behind her,
-  wider FOV). The character always faces wherever the camera looks (shooter-
-  style) — movement is forward/back/strafe relative to that facing, not tied
-  to which way she's walking. Lock-on (Q / Tab to cycle targets on desktop,
-  LOCK button on mobile) blends camera yaw toward the target while still
-  tracking your own look input.
-- **Player**: WASD + mouse-look movement (desktop), virtual joystick + drag-look
-  (mobile), light attack, dodge roll with brief invulnerability, held block,
-  stamina economy.
-- **Block**: hold right-click (desktop) or the BLOCK button (mobile) to raise
-  a guard. Cuts normal-hit damage by ~65% and drains stamina while held.
-  Doesn't stagger you or wear down armor the way a raw hit does, so you can
-  hold through a few hits — but grab/slam attacks punch through a guard by
-  design, so dodging is still required for those. Dodge cancels out of block
-  instantly.
-- **Armor integrity system**: 3 visible armor plates that detach as the player
-  takes hits. At 0 integrity, armor is fully broken — takes more damage,
-  drains stamina/sanity faster. This is a pure difficulty/risk mechanic
-  (defense stat), not tied to any explicit content.
-- **Sanity / Corruption as a soft debuff, not a fail state**: sanity drops on
-  every hit taken (more on a landed heavy/grab attack), regenerates slowly out
-  of combat. Low sanity weakens you — reduced attack damage, movement speed,
-  and stamina regen on a three-tier curve (see `sanityDamageMultiplier` /
-  `sanitySpeedMultiplier` / `sanityRegenMultiplier` in `player.js`) — but it
-  never ends the run by itself; only HP loss does. Corruption only climbs and
-  drives a permanent red-violet vignette and fog color shift as the run gets
-  rougher.
-- **Combo system**: every 3rd sword swing lands a heavy hit — bigger damage,
-  a wider weapon-swing arc/scale, and extra hit-stop/camera-punch on impact.
-  Tracked via `player.attackCount` / `lastAttackWasHeavy`.
-- **HP flask**: starts full (3/3), refills from kills afterward. Press E (or
-  the FLASK button on mobile) to drink one — heals HP, restores some sanity,
-  and repairs one layer of armor, but roots you in place for one second, so
-  timing it mid-fight is a real risk/reward call.
-- **Perfect dodge**: dodging within ~0.28s of an enemy's telegraphed attack
-  landing cancels that attack, staggers the enemy for a long punish window,
-  fully refunds the dodge's stamina cost, and gives a small sanity bump — the
-  core skill expression of reading a tell and dodging through it.
-- **Hit-stop, camera punch, screen shake**: meaningful hits (landed or taken)
-  briefly slow or freeze time and pull the camera in slightly — standard
-  "game feel" techniques so hits read as impactful. A perfect dodge triggers a
-  longer, gentler slow-mo instead of a hard freeze. A successfully blocked hit
-  gets its own quieter feedback (a thud + small camera punch, no shake/message
-  spam) so it reads as mitigated, not as a full hit.
-- **Synthesized audio** (`js/audio.js`): swings, clangs, dodge whooshes, a
-  perfect-dodge chime, heavy impacts, a block thud, a boss roar, and death
-  stingers, all generated at runtime via the Web Audio API — no audio files
-  to host.
-- **Progression — embers & upgrade shrine**: enemies drop embers on death (8
-  regular / 35 named boss), and each floor hides one glowing ember cache off
-  the main path worth a bonus 15. Clearing a floor's enemies and reaching the
-  gate opens an upgrade shrine — pick 1 of 3 random boons (more HP, stamina,
-  damage, move speed, sanity, a flask charge, or stronger blocking) before
-  descending. Boons stack for the rest of the run.
-- **Three floors**, each with its own roster (`js/enemies/floor1.js`,
-  `floor2.js`, `floor3.js`) and a distinct lighting/fog theme (amber →
-  rust-red → cold blue, via `dungeon.js`'s `applyFloorTheme()`) so each floor
-  reads as a different place, not a re-skinned copy:
-  - Floor 1 — The Warden's Depth: `Dungeon Brute`, `Blade Thrall`, boss
-    `The Warden`
-  - Floor 2 — The Rust Hollow: `Iron Guard` (x2), `Chain Flagellant`, boss
-    `The Tormentor`
-  - Floor 3 — The Cold Sanctum (final): `Sentinel Hulk` (x2), `Shadow
-    Stalker` (x2), boss `The Hollow King`
-
-  All enemies telegraph attacks with a ground ring before they land — dodge
-  through it for i-frames or a perfect-dodge punish, block through it if it's
-  not a grab/slam, souls-style. A percentage of attacks are heavier grab/slam
-  telegraphs (longer windup, bigger damage/sanity hit, brief stun on
-  landing). The three fast enemy types (`Blade Thrall`, `Chain Flagellant`,
-  `Shadow Stalker`) can chain a second, quicker attack onto their first
-  instead of always recovering — same telegraph-then-punish rules apply, it
-  just keeps you honest about when an opening is actually safe. Named bosses
-  also get a wide-radius AOE slam attack and a phase-2 enrage at 50% HP
-  (faster/harder attacks, roar/shake beat, redder aura).
-- **Win condition**: clear a floor's enemies, pick an upgrade, then reach the
-  gate to descend to the next floor (roster respawns, player resets to the
-  entrance, new floor theme applies). Clearing the final floor's gate wins the
-  run. Losing all HP ends the run with a stats recap (floor reached, embers
-  collected, sanity, corruption %, armor condition, enemies defeated).
-- **Age gate**: a confirmation screen blocks entry until the player confirms
-  18+, matching the mature-content framing you asked for, without any actual
-  explicit content behind it.
-
-## Extending it
-
-- **Even more floors**: add a `floor4.js` etc. following the same `def`/
-  roster shape, add it to the `FLOORS` array in `main.js`, and give it an
-  entry in `FLOOR_THEMES` in `dungeon.js` plus a position in
-  `TREASURE_POSITIONS` in `main.js`.
-- **More upgrades**: add entries to the `UPGRADES` array in `main.js` — each
-  just needs a `name`, `desc`, and an `apply(player)` function that mutates
-  player stats.
-- **More enemy variety**: add new entries to a roster array — `Enemy` reads
-  everything from the `def` object, so no new classes are needed for simple
-  stat/behavior variants (including `canCombo` for chained attacks).
-- **Visuals**: swap the primitive Three.js meshes for GLTF models by loading
-  them with `GLTFLoader` from `three/addons/loaders/GLTFLoader.js` (already
-  available via the import map) in place of `_buildMesh()`.
+- **Dynamic dual-fighter camera**: recalculates every frame from the
+  midpoint and separation between the two fighters — pulls back as they
+  move apart, pushes in as they close, and holds a consistent side so it
+  doesn't flip when fighters cross paths. No manual camera control needed;
+  it just frames the fight, Power Stone/Smash-style.
+- **Movement**: fighters always face each other. Forward/back movement
+  walks toward/away from the opponent along that facing; strafe
+  circles around them — the standard 3D-arena-fighter movement model
+  (Naruto Storm, Power Stone, Tekken's sidestep).
+- **Kit**: Light attack (fast, low damage, chains into a combo string with
+  damage scaling per hit), Heavy attack (slower, bigger damage/impact,
+  resets the light string), Block (held — cuts normal damage ~70%, doesn't
+  stop specials, no stagger/combo-break on a successful block), Evade (a
+  quick i-frame dash), Special (meter-gated, big damage, chips through
+  block, meter fills from dealing/taking damage).
+- **Frame-data-style attacks**: every attack has a startup (no hitbox),
+  active (hitbox live), and recovery (vulnerable) phase — `js/fighter.js`'s
+  `ATTACK_SPECS`. This is what makes attacks punishable/whiffable instead of
+  instant.
+- **Best-of-3 rounds**: win 2 rounds (KO or higher health when the clock
+  hits 0) to win the match and advance the ladder. Round pips show wins for
+  both sides; a 60s clock counts down each round.
+- **7-fighter arcade ladder** (`js/roster.js`), each with a distinct AI
+  archetype (approach range, aggression, block/evade reflexes, light/heavy
+  mix, how eagerly they use their special): Dungeon Brute, Blade Thrall,
+  Iron Guard, Chain Flagellant, Sentinel Hulk, Shadow Stalker, and final
+  boss The Hollow King (gets a phase-2 speed boost at 50% HP).
+- **Per-fighter stage themes**: each ladder opponent's stage has a distinct
+  torch/fog/ground tint (`js/arena.js`).
+- **Synthesized audio** (`js/audio.js`): swings, light/heavy/special hit
+  sounds, block thud, evade whoosh, round-start chime, K.O. stinger, victory
+  fanfare, defeat stinger — all generated at runtime via the Web Audio API,
+  no audio files to host.
+- **Age gate**: unchanged from before — a confirmation screen blocks entry
+  until the player confirms 18+.
 
 ## Controls reference
 
 | Action | Desktop | Mobile |
 |---|---|---|
 | Move | WASD / arrows | Left virtual stick |
-| Camera / facing | Mouse (click canvas to lock cursor) | Drag right side of screen |
-| Attack | Left click | ATTACK button |
-| Block (hold) | Right click (hold) | BLOCK button (hold) |
-| Dodge | Space | DODGE button |
-| Lock-on / cycle target | Q or Tab | LOCK button |
-| Drink HP flask | E | FLASK button |
+| Light attack | J or Left click | LIGHT button |
+| Heavy attack | K or Right click | HEAVY button |
+| Block (hold) | Shift (hold) | BLOCK button (hold) |
+| Evade | Space | EVADE button |
+| Special (needs full meter) | E | SPECIAL button |
+
+## Extending it
+
+- **More fighters**: add entries to `ROSTER` in `js/roster.js` — each needs
+  a `def` (stats) and `archetype` (AI behavior params). No new code needed.
+- **New attack types**: add an entry to `ATTACK_SPECS` in `js/fighter.js`
+  and a corresponding `tryX()` method modeled on `tryHeavy()`.
+- **Character select**: currently the player is locked to `PLAYER_DEF` in
+  `roster.js` — a select screen would mean picking a `def` before
+  `startGame()` runs.
+- **Visuals**: swap the primitive Three.js meshes for GLTF models via
+  `GLTFLoader` (`three/addons/loaders/GLTFLoader.js`, already in the import
+  map) in `Fighter._buildMesh()`.
