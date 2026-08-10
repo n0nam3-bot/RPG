@@ -1,78 +1,68 @@
 export class UI {
   constructor() {
-    this.healthFill = document.getElementById('health-fill');
-    this.staminaFill = document.getElementById('stamina-fill');
-    this.sanityFill = document.getElementById('sanity-fill');
-    this.corruptionFill = document.getElementById('corruption-fill');
-    this.armorReadout = document.getElementById('armor-readout');
-    this.potionReadout = document.getElementById('potion-readout');
-    this.emberReadout = document.getElementById('ember-readout');
-    this.floorReadout = document.getElementById('floor-readout');
-    this.bossHud = document.getElementById('boss-hud');
-    this.bossName = document.getElementById('boss-name');
-    this.bossFill = document.getElementById('boss-fill');
+    this.p1Name = document.getElementById('p1-name');
+    this.p1HealthFill = document.getElementById('p1-health-fill');
+    this.p1MeterFill = document.getElementById('p1-meter-fill');
+    this.p1Pips = document.getElementById('p1-pips');
+
+    this.p2Name = document.getElementById('p2-name');
+    this.p2HealthFill = document.getElementById('p2-health-fill');
+    this.p2MeterFill = document.getElementById('p2-meter-fill');
+    this.p2Pips = document.getElementById('p2-pips');
+
+    this.roundTimer = document.getElementById('round-timer');
+    this.ladderProgress = document.getElementById('ladder-progress');
     this.centerMsg = document.getElementById('center-msg');
-    this.lockReticle = document.getElementById('lock-reticle');
     this.hint = document.getElementById('hud-hint');
-    this.upgradeModal = document.getElementById('upgrade-modal');
-    this.upgradeChoicesEl = document.getElementById('upgrade-choices');
     this._msgTimeout = null;
   }
 
-  updatePlayerStats(player) {
-    this.healthFill.style.width = `${(player.health / player.maxHealth) * 100}%`;
-    this.staminaFill.style.width = `${(player.stamina / player.maxStamina) * 100}%`;
-    this.sanityFill.style.width = `${(player.sanity / player.maxSanity) * 100}%`;
-    this.corruptionFill.style.width = `${player.corruption}%`;
-    this.armorReadout.textContent = `ARMOR: ${player.armorLabel}`;
-    this.armorReadout.style.color = player.armorBroken ? '#c14a72' : '#b8974f';
-    this.potionReadout.textContent = `FLASKS: ${player.potionCharges} / ${player.maxPotionCharges}`;
-    this.emberReadout.textContent = `EMBERS: ${player.embers}`;
+  setNames(p1Name, p2Name) {
+    this.p1Name.textContent = p1Name.toUpperCase();
+    this.p2Name.textContent = p2Name.toUpperCase();
   }
 
-  // Renders the floor-clear upgrade shrine. onPick(choice) fires when the
-  // player clicks/taps a card; caller is responsible for hiding the modal.
-  showUpgradeChoices(choices, onPick) {
-    this.upgradeChoicesEl.innerHTML = '';
-    for (const choice of choices) {
-      const btn = document.createElement('button');
-      btn.className = 'upgrade-choice-btn';
-      btn.innerHTML = `<div class="upgrade-choice-name">${choice.name}</div><div class="upgrade-choice-desc">${choice.desc}</div>`;
-      btn.addEventListener('click', () => onPick(choice));
-      this.upgradeChoicesEl.appendChild(btn);
+  updateHealth(p1, p2) {
+    this.p1HealthFill.style.width = `${Math.max(0, (p1.health / p1.maxHealth) * 100)}%`;
+    this.p2HealthFill.style.width = `${Math.max(0, (p2.health / p2.maxHealth) * 100)}%`;
+    this.p1MeterFill.style.width = `${(p1.meter / p1.maxMeter) * 100}%`;
+    this.p2MeterFill.style.width = `${(p2.meter / p2.maxMeter) * 100}%`;
+  }
+
+  setRoundPips(p1Wins, p2Wins, winsNeeded) {
+    this._renderPips(this.p1Pips, p1Wins, winsNeeded);
+    this._renderPips(this.p2Pips, p2Wins, winsNeeded);
+  }
+
+  _renderPips(container, wins, total) {
+    container.innerHTML = '';
+    for (let i = 0; i < total; i++) {
+      const pip = document.createElement('div');
+      pip.className = 'pip' + (i < wins ? ' won' : '');
+      container.appendChild(pip);
     }
-    this.upgradeModal.classList.remove('hidden');
   }
 
-  hideUpgradeChoices() {
-    this.upgradeModal.classList.add('hidden');
+  setTimer(seconds) {
+    this.roundTimer.textContent = Math.max(0, Math.ceil(seconds));
+    this.roundTimer.style.color = seconds <= 10 ? '#c23b46' : '#cdc4b0';
   }
 
-  setFloor(current, total) {
-    this.floorReadout.textContent = `FLOOR ${current} / ${total}`;
+  setLadderProgress(current, total) {
+    this.ladderProgress.textContent = `FIGHTER ${current} / ${total}`;
   }
 
-  updateBoss(enemy) {
-    if (!enemy || !enemy.alive) {
-      this.bossHud.style.display = 'none';
-      return;
-    }
-    this.bossHud.style.display = 'block';
-    this.bossName.textContent = enemy.name.toUpperCase();
-    this.bossFill.style.width = `${(enemy.health / enemy.maxHealth) * 100}%`;
-  }
-
-  showMessage(text, duration = 2200) {
+  showMessage(text, duration = 1800) {
     this.centerMsg.textContent = text;
     this.centerMsg.classList.add('show');
     clearTimeout(this._msgTimeout);
-    this._msgTimeout = setTimeout(() => {
-      this.centerMsg.classList.remove('show');
-    }, duration);
+    if (duration > 0) {
+      this._msgTimeout = setTimeout(() => this.centerMsg.classList.remove('show'), duration);
+    }
   }
 
-  setLockOn(active) {
-    this.lockReticle.style.display = active ? 'block' : 'none';
+  hideMessage() {
+    this.centerMsg.classList.remove('show');
   }
 
   setHint(text) {

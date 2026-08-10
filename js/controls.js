@@ -1,19 +1,18 @@
-// controls.js — unifies keyboard/mouse (desktop) and touch (mobile) input
-// into a single state object the rest of the game reads from.
+// controls.js — fighting-game input. No mouse-look/pointer-lock needed here
+// since the camera auto-frames both fighters (see updateCamera in main.js);
+// the player only ever provides movement + action inputs.
 
 export const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
 export class InputState {
   constructor() {
-    this.moveX = 0;      // -1..1 strafe
-    this.moveY = 0;      // -1..1 forward/back
-    this.lookDX = 0;      // camera yaw delta this frame
-    this.lookDY = 0;      // camera pitch delta this frame
-    this.attackPressed = false; // edge-triggered
-    this.dodgePressed = false;  // edge-triggered
-    this.lockPressed = false;   // edge-triggered
-    this.potionPressed = false; // edge-triggered
-    this.blockHeld = false;     // held state, not edge-triggered
+    this.moveX = 0; // strafe/circle, -1..1
+    this.moveY = 0; // toward/away from opponent, -1..1
+    this.lightPressed = false;   // edge-triggered
+    this.heavyPressed = false;   // edge-triggered
+    this.evadePressed = false;   // edge-triggered
+    this.specialPressed = false; // edge-triggered
+    this.blockHeld = false;      // held state, not edge-triggered
     this._keys = {};
 
     this._setupKeyboard();
@@ -24,32 +23,23 @@ export class InputState {
   _setupKeyboard() {
     window.addEventListener('keydown', (e) => {
       this._keys[e.code] = true;
-      if (e.code === 'Space') { this.dodgePressed = true; }
-      if (e.code === 'KeyQ' || e.code === 'Tab') { this.lockPressed = true; e.preventDefault(); }
-      if (e.code === 'KeyE') { this.potionPressed = true; }
+      if (e.code === 'Space') this.evadePressed = true;
+      if (e.code === 'KeyJ') this.lightPressed = true;
+      if (e.code === 'KeyK') this.heavyPressed = true;
+      if (e.code === 'KeyE') this.specialPressed = true;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.blockHeld = true;
     });
-    window.addEventListener('keyup', (e) => { this._keys[e.code] = false; });
+    window.addEventListener('keyup', (e) => {
+      this._keys[e.code] = false;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.blockHeld = false;
+    });
   }
 
   _setupMouse() {
     const canvas = document.getElementById('game-canvas');
-    canvas.addEventListener('click', () => {
-      if (document.pointerLockElement !== canvas && !isTouchDevice) {
-        canvas.requestPointerLock();
-      }
-    });
     canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 0) this.attackPressed = true;
-      if (e.button === 2) this.blockHeld = true;
-    });
-    window.addEventListener('mouseup', (e) => {
-      if (e.button === 2) this.blockHeld = false;
-    });
-    document.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement === canvas) {
-        this.lookDX += e.movementX;
-        this.lookDY += e.movementY;
-      }
+      if (e.button === 0) this.lightPressed = true;
+      if (e.button === 2) this.heavyPressed = true;
     });
     window.addEventListener('contextmenu', (e) => e.preventDefault());
   }
@@ -57,14 +47,14 @@ export class InputState {
   _setupTouch() {
     document.getElementById('touch-controls').classList.remove('hidden');
 
-    // Virtual joystick
+    // Virtual joystick — movement only, no camera drag needed
     const zone = document.getElementById('joystick-zone');
     const knob = document.getElementById('joystick-knob');
     let dragging = false;
     let originX = 0, originY = 0;
     const radius = 45;
 
-    const startDrag = (x, y) => {
+    const startDrag = () => {
       dragging = true;
       const rect = zone.getBoundingClientRect();
       originX = rect.left + rect.width / 2;
@@ -80,7 +70,7 @@ export class InputState {
       const ky = Math.sin(angle) * dist;
       knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
       this.moveX = kx / radius;
-      this.moveY = -ky / radius; // invert: up = forward
+      this.moveY = -ky / radius;
     };
     const endDrag = () => {
       dragging = false;
@@ -92,47 +82,18 @@ export class InputState {
     zone.addEventListener('touchmove', (e) => { moveDrag(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); });
     zone.addEventListener('touchend', (e) => { endDrag(); e.preventDefault(); });
 
-    // Camera look via drag anywhere on canvas (right side of screen)
-    const canvas = document.getElementById('game-canvas');
-    let lookTouchId = null;
-    let lastX = 0, lastY = 0;
-    canvas.addEventListener('touchstart', (e) => {
-      for (const t of e.changedTouches) {
-        if (t.clientX > window.innerWidth * 0.4 && lookTouchId === null) {
-          lookTouchId = t.identifier;
-          lastX = t.clientX; lastY = t.clientY;
-        }
-      }
-    });
-    canvas.addEventListener('touchmove', (e) => {
-      for (const t of e.changedTouches) {
-        if (t.identifier === lookTouchId) {
-          this.lookDX += (t.clientX - lastX) * 2.2;
-          this.lookDY += (t.clientY - lastY) * 2.2;
-          lastX = t.clientX; lastY = t.clientY;
-        }
-      }
-    });
-    canvas.addEventListener('touchend', (e) => {
-      for (const t of e.changedTouches) {
-        if (t.identifier === lookTouchId) lookTouchId = null;
-      }
-    });
-
-    // Buttons
-    document.getElementById('btn-attack').addEventListener('touchstart', (e) => { this.attackPressed = true; e.preventDefault(); });
-    document.getElementById('btn-dodge').addEventListener('touchstart', (e) => { this.dodgePressed = true; e.preventDefault(); });
-    document.getElementById('btn-lock').addEventListener('touchstart', (e) => { this.lockPressed = true; e.preventDefault(); });
-    document.getElementById('btn-potion').addEventListener('touchstart', (e) => { this.potionPressed = true; e.preventDefault(); });
+    document.getElementById('btn-light').addEventListener('touchstart', (e) => { this.lightPressed = true; e.preventDefault(); });
+    document.getElementById('btn-heavy').addEventListener('touchstart', (e) => { this.heavyPressed = true; e.preventDefault(); });
+    document.getElementById('btn-evade').addEventListener('touchstart', (e) => { this.evadePressed = true; e.preventDefault(); });
+    document.getElementById('btn-special').addEventListener('touchstart', (e) => { this.specialPressed = true; e.preventDefault(); });
 
     const blockBtn = document.getElementById('btn-block');
     blockBtn.addEventListener('touchstart', (e) => { this.blockHeld = true; e.preventDefault(); });
     blockBtn.addEventListener('touchend', (e) => { this.blockHeld = false; e.preventDefault(); });
   }
 
-  // Keyboard movement is polled (not event-based) for smoothness
   pollKeyboardMove() {
-    if (isTouchDevice) return; // joystick already sets moveX/moveY directly
+    if (isTouchDevice) return;
     let x = 0, y = 0;
     if (this._keys['KeyW'] || this._keys['ArrowUp']) y += 1;
     if (this._keys['KeyS'] || this._keys['ArrowDown']) y -= 1;
@@ -143,13 +104,10 @@ export class InputState {
     this.moveY = y / len;
   }
 
-  // Call at end of each frame to clear edge-triggered flags
   consumeFrame() {
-    this.attackPressed = false;
-    this.dodgePressed = false;
-    this.lockPressed = false;
-    this.potionPressed = false;
-    this.lookDX = 0;
-    this.lookDY = 0;
+    this.lightPressed = false;
+    this.heavyPressed = false;
+    this.evadePressed = false;
+    this.specialPressed = false;
   }
 }

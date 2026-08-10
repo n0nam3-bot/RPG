@@ -1,54 +1,23 @@
 import * as THREE from 'three';
 import { InputState, isTouchDevice } from './controls.js';
-import { Player } from './player.js';
-import { Enemy } from './enemy.js';
-import { FLOOR1_ROSTER } from './enemies/floor1.js';
-import { FLOOR2_ROSTER } from './enemies/floor2.js';
-import { FLOOR3_ROSTER } from './enemies/floor3.js';
-import { buildDungeon, applyFloorTheme } from './dungeon.js';
-import { SanityFX } from './sanity.js';
+import { Fighter } from './fighter.js';
+import { FighterAI } from './ai.js';
+import { ROSTER, PLAYER_DEF } from './roster.js';
+import { buildArena, applyStageTheme, clampToStage } from './arena.js';
 import { UI } from './ui.js';
-import { resolvePlayerAttacks, findLockOnTarget, checkPerfectDodge } from './combat.js';
+import { resolveAttack } from './combat.js';
 import { Audio } from './audio.js';
 
-const FLOORS = [FLOOR1_ROSTER, FLOOR2_ROSTER, FLOOR3_ROSTER];
-const GATE_POSITION = { x: 0, z: -21 };
-const PLAYER_START = { x: 0, z: 8 };
-
-// One hidden ember cache per floor, tucked off the main path — a small
-// exploration reward. [x, z] positions, kept clear of pillars/walls.
-const TREASURE_POSITIONS = [
-  [-17, -19],
-  [17, -19],
-  [-17, 6],
-];
-
-// Upgrade shrine pool — offered 3-at-a-time after clearing a floor.
-// Each apply(player) mutates the persistent player stats directly.
-const UPGRADES = [
-  { id: 'vitality', name: 'Vitality Up', desc: '+20 Max HP (full heal)', apply: p => { p.maxHealth += 20; p.health = p.maxHealth; } },
-  { id: 'endurance', name: 'Endurance Up', desc: '+15 Max Stamina', apply: p => { p.maxStamina += 15; p.stamina = p.maxStamina; } },
-  { id: 'keenedge', name: 'Keen Edge', desc: '+15% Attack Damage', apply: p => { p.damageMult *= 1.15; } },
-  { id: 'swiftfeet', name: 'Swift Feet', desc: '+10% Move Speed', apply: p => { p.moveSpeedMult *= 1.10; } },
-  { id: 'steadymind', name: 'Steady Mind', desc: '+15 Max Sanity (full restore)', apply: p => { p.maxSanity += 15; p.sanity = p.maxSanity; } },
-  { id: 'deepflask', name: 'Deep Flask', desc: '+1 Max Flask Charge (refilled)', apply: p => { p.maxPotionCharges += 1; p.potionCharges = p.maxPotionCharges; } },
-  { id: 'ironguard', name: 'Iron Guard', desc: 'Blocking absorbs 15% more damage', apply: p => { p.blockDamageReduction = Math.min(0.9, p.blockDamageReduction + 0.15); } },
-];
-
-function pickRandomUpgrades(n) {
-  const pool = [...UPGRADES];
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  return pool.slice(0, n);
-}
+const WINS_NEEDED = 2; // best of 3
+const ROUND_DURATION = 60;
+const P1_START = new THREE.Vector3(-3, 0, 0);
+const P2_START = new THREE.Vector3(3, 0, 0);
 
 // ================= Age gate =================
 const ageGate = document.getElementById('age-gate');
 const audio = new Audio();
 document.getElementById('age-confirm').addEventListener('click', () => {
-  audio.unlock(); // first real user gesture — safe to init AudioContext
+  audio.unlock();
   ageGate.classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
   startGame();
@@ -59,38 +28,34 @@ document.getElementById('age-deny').addEventListener('click', () => {
 
 // ================= Core three.js setup =================
 let scene, camera, renderer, clock;
-let player, ui, sanityFX, input, dungeon;
-let enemies = [];
-let bossEnemy = null;
-let lockedTarget = null;
-let currentFloor = 0; // index into FLOORS
-let camYaw = 0, camPitch = 0.12;
-const camDistance = 4.1;      // Marvel Rivals-style: closer, over-the-shoulder
-const shoulderOffset = 0.85;   // lateral shift so the character isn't dead-center
+let ui, input, arena;
+let player, opponent, opponentAI;
+let currentOpponentIndex = 0;
+let currentRound = 1;
+let p1Wins = 0, p2Wins = 0;
+let roundTime = ROUND_DURATION;
+let matchPhase = 'intro'; // intro, fighting, roundEnd
+let phaseTimer = 0;
+let introFightShown = false;
 let gameOver = false;
-let gameWon = false;
-let upgradePending = false;    // true while the floor-clear shrine modal is up
 
-let treasureMesh = null;
-let treasureCollected = false;
+const camLookTarget = new THREE.Vector3(0, 1.3, 0);
+let camPerpRef = new THREE.Vector3(0, 0, 1);
+let camPosInitialized = false;
 
-// ===== Feel/juice state =====
-let hitStopTimer = 0;   // when > 0, time is heavily slowed (impact freeze-frame)
-let slowMoTimer = 0;     // when > 0, time is gently slowed (perfect-dodge bullet-time)
-let camPunch = 0;         // extra inward camera pull that decays each frame
+let hitStopTimer = 0;
+let camPunch = 0;
 
-function triggerHitStop(duration) { hitStopTimer = Math.max(hitStopTimer, duration); }
-function triggerSlowMo(duration) { slowMoTimer = Math.max(slowMoTimer, duration); }
-function triggerCamPunch(amount) { camPunch = Math.max(camPunch, amount); }
+function triggerHitStop(d) { hitStopTimer = Math.max(hitStopTimer, d); }
+function triggerCamPunch(a) { camPunch = Math.max(camPunch, a); }
 
 function initScene() {
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
-
+  camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 100);
   renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = false; // keep it light for mobile GPUs
+  renderer.shadowMap.enabled = false;
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -103,201 +68,147 @@ function initScene() {
 
 function startGame() {
   initScene();
-  dungeon = buildDungeon(scene);
-  player = new Player(scene);
+  arena = buildArena(scene);
   ui = new UI();
-  sanityFX = new SanityFX(scene);
   input = new InputState();
 
-  currentFloor = 0;
-  spawnFloor(0, false);
+  player = new Fighter(scene, PLAYER_DEF, P1_START, true);
+  spawnOpponent(0);
 
   ui.setHint(isTouchDevice
-    ? 'Drag left stick to move · drag screen to look · ATTACK / BLOCK / DODGE / LOCK / FLASK'
-    : 'WASD move · mouse look (click to lock cursor) · Click attack · Right-click hold block · Space dodge · Q lock-on · E flask');
+    ? 'Drag stick to move · LIGHT / HEAVY / BLOCK (hold) / EVADE / SPECIAL'
+    : 'WASD move · J light · K heavy (or Left/Right click) · Shift hold block · Space evade · E special (at full meter)');
 
-  ui.showMessage('THE WARDEN\u2019S DEPTH', 2600);
+  document.getElementById('restart-btn').addEventListener('click', () => window.location.reload());
 
-  document.getElementById('restart-btn').addEventListener('click', () => {
-    window.location.reload();
-  });
-
+  beginRound(true);
   requestAnimationFrame(loop);
 }
 
-// Spawns a floor's roster, clearing whatever was there before. If
-// resetPlayer is true, the player is walked back to the entrance (used on
-// floor transitions, not the very first spawn).
-function spawnFloor(floorIndex, resetPlayer) {
-  for (const enemy of enemies) {
-    scene.remove(enemy.group);
-  }
-  enemies = [];
-  bossEnemy = null;
-  lockedTarget = null;
-
-  const roster = FLOORS[floorIndex];
-  enemies = roster.map(entry => {
-    const pos = new THREE.Vector3(...entry.position);
-    const e = new Enemy(scene, entry.def, pos);
-    if (entry.isBoss) bossEnemy = e;
-    return e;
-  });
-
-  dungeon.gateMat.emissive.set(0x000000);
-  dungeon.gateMat.emissiveIntensity = 0;
-
-  const themeName = applyFloorTheme(scene, dungeon, floorIndex);
-  sanityFX.setBaseFogColor(scene.fog.color.getHex());
-
-  if (resetPlayer) {
-    player.group.position.set(PLAYER_START.x, 0, PLAYER_START.z);
-  }
-
-  spawnTreasure(floorIndex);
-
-  ui.setFloor(floorIndex + 1, FLOORS.length);
-  return themeName;
+function spawnOpponent(index) {
+  const entry = ROSTER[index];
+  opponent = new Fighter(scene, entry.def, P2_START, false);
+  opponent.phase2Triggered = false;
+  opponentAI = new FighterAI(opponent, entry.archetype);
+  applyStageTheme(scene, arena, index);
+  ui.setNames(PLAYER_DEF.name, entry.def.name);
+  ui.setLadderProgress(index + 1, ROSTER.length);
 }
 
-function spawnTreasure(floorIndex) {
-  if (treasureMesh) {
-    scene.remove(treasureMesh);
-    treasureMesh = null;
-  }
-  treasureCollected = false;
-  const [x, z] = TREASURE_POSITIONS[floorIndex] ?? TREASURE_POSITIONS[TREASURE_POSITIONS.length - 1];
-
-  const geo = new THREE.OctahedronGeometry(0.35, 0);
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xd4a04f, emissive: 0xd4a04f, emissiveIntensity: 0.9, roughness: 0.3, metalness: 0.4,
-  });
-  treasureMesh = new THREE.Mesh(geo, mat);
-  treasureMesh.position.set(x, 1.1, z);
-  scene.add(treasureMesh);
-
-  const glow = new THREE.PointLight(0xd4a04f, 3, 5, 2);
-  glow.position.set(0, 0, 0);
-  treasureMesh.add(glow);
+function beginRound(firstEver) {
+  player.resetForNewRound(P1_START);
+  opponent.resetForNewRound(P2_START);
+  roundTime = ROUND_DURATION;
+  matchPhase = 'intro';
+  phaseTimer = 2.0;
+  introFightShown = false;
+  ui.setRoundPips(p1Wins, p2Wins, WINS_NEEDED);
+  ui.showMessage(`ROUND ${currentRound}`, 1300);
+  audio.roundStart();
 }
 
-function updateTreasure(dt) {
-  if (!treasureMesh || treasureCollected) return;
-  treasureMesh.rotation.y += dt * 1.4;
-  treasureMesh.position.y = 1.1 + Math.sin(performance.now() * 0.002) * 0.15;
-
-  const dist = treasureMesh.position.distanceTo(player.group.position);
-  if (dist < 1.6) {
-    treasureCollected = true;
-    player.addEmbers(15);
-    audio.perfectChime();
-    ui.showMessage('EMBER CACHE FOUND (+15)', 1800);
-    scene.remove(treasureMesh);
-    treasureMesh = null;
-  }
-}
-
-// ================= Camera rig (over-the-shoulder, Marvel Rivals-style) =====
+// ================= Camera (dynamic dual-fighter framing) =================
 function updateCamera(dt) {
-  const sensitivity = isTouchDevice ? 0.0035 : 0.0028;
-  camYaw -= input.lookDX * sensitivity;
-  camPitch -= input.lookDY * sensitivity;
-  camPitch = Math.max(-0.2, Math.min(0.85, camPitch));
+  const mid = new THREE.Vector3().addVectors(player.group.position, opponent.group.position).multiplyScalar(0.5);
+  const sep = new THREE.Vector3().subVectors(opponent.group.position, player.group.position);
+  sep.y = 0;
+  const sepDist = Math.max(sep.length(), 0.001);
+  const sepNorm = sep.clone().divideScalar(sepDist);
+  let perp = new THREE.Vector3(-sepNorm.z, 0, sepNorm.x);
 
-  if (lockedTarget && lockedTarget.alive) {
-    const dx = lockedTarget.group.position.x - player.group.position.x;
-    const dz = lockedTarget.group.position.z - player.group.position.z;
-    const desiredYaw = Math.atan2(dx, dz);
-    let diff = desiredYaw - camYaw;
-    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    camYaw += diff * Math.min(1, dt * 4.5);
-    player.forcedFacing = desiredYaw;
+  // Avoid the camera flipping to the opposite side every time the fighters
+  // cross paths — keep whichever side is closer to the previous frame.
+  if (perp.dot(camPerpRef) < 0) perp.multiplyScalar(-1);
+  camPerpRef.copy(perp);
+
+  const camDist = THREE.MathUtils.clamp(sepDist * 1.5 + 5.5, 7.5 - camPunch, 15 - camPunch);
+  const desiredPos = new THREE.Vector3(
+    mid.x + perp.x * camDist,
+    4.3,
+    mid.z + perp.z * camDist
+  );
+
+  if (!camPosInitialized) {
+    camera.position.copy(desiredPos);
+    camPosInitialized = true;
   } else {
-    // Shooter-style: character always faces where the camera looks, not
-    // just her movement direction. Movement becomes forward/back + strafe
-    // relative to that facing, which is what makes an over-the-shoulder
-    // rig like this actually feel controllable.
-    player.forcedFacing = camYaw;
+    camera.position.lerp(desiredPos, 1 - Math.exp(-7 * dt));
   }
 
-  const effectiveDistance = camDistance - camPunch;
-
-  const backX = Math.sin(camYaw) * Math.cos(camPitch) * effectiveDistance;
-  const backZ = Math.cos(camYaw) * Math.cos(camPitch) * effectiveDistance;
-  const backY = 1.5 + Math.sin(camPitch) * effectiveDistance;
-
-  const rightX = Math.cos(camYaw);
-  const rightZ = -Math.sin(camYaw);
-
-  const camPos = new THREE.Vector3(
-    player.group.position.x + backX + rightX * shoulderOffset,
-    backY,
-    player.group.position.z + backZ + rightZ * shoulderOffset
-  );
-  camera.position.copy(camPos);
-
-  const lookTarget = player.group.position.clone().add(new THREE.Vector3(
-    rightX * shoulderOffset * 0.5,
-    1.35,
-    rightZ * shoulderOffset * 0.5
-  ));
-  camera.lookAt(lookTarget);
+  const desiredLook = new THREE.Vector3(mid.x, 1.3, mid.z);
+  camLookTarget.lerp(desiredLook, 1 - Math.exp(-7 * dt));
+  camera.lookAt(camLookTarget);
 
   camPunch = Math.max(0, camPunch - dt * 6);
 }
 
-// ================= Game flow helpers =================
-function handleEnemyHit(enemy, killed, wasHeavy) {
-  if (killed) {
-    audio.enemyDeath();
-    triggerHitStop(0.09);
-    ui.showMessage(enemy.isNamed ? `${enemy.name.toUpperCase()} HAS FALLEN` : 'ENEMY SLAIN', 1800);
-    if (lockedTarget === enemy) lockedTarget = null;
-    player.addPotionCharge();
-    player.addEmbers(enemy.isNamed ? 35 : 8);
+// ================= Combat feedback =================
+function onHitResult(result, attackType, defenderIsPlayer) {
+  if (!result.landed) return;
 
-    const anyAlive = enemies.some(e => e.alive);
-    if (!anyAlive) {
-      dungeon.gateMat.emissive.set(0x8a1f2b);
-      dungeon.gateMat.emissiveIntensity = 0.6;
-      ui.showMessage('THE PATH IS OPEN — REACH THE GATE', 3000);
-    }
-  } else {
-    audio.hitClang();
-    triggerHitStop(wasHeavy ? 0.08 : 0.045);
-    triggerCamPunch(wasHeavy ? 0.7 : 0.4);
-    if (wasHeavy) ui.showMessage('HEAVY STRIKE', 900);
+  if (result.blocked) {
+    audio.blockThud();
+    triggerCamPunch(0.3);
+    return;
+  }
+
+  if (attackType === 'light') audio.hitLight();
+  else if (attackType === 'heavy') audio.hitHeavy();
+  else audio.hitSpecial();
+
+  const stopAmt = attackType === 'special' ? 0.14 : attackType === 'heavy' ? 0.08 : 0.04;
+  const punchAmt = attackType === 'special' ? 1.2 : attackType === 'heavy' ? 0.7 : 0.35;
+  triggerHitStop(stopAmt);
+  triggerCamPunch(punchAmt);
+
+  if (result.ko) {
+    handleKO(defenderIsPlayer);
   }
 }
 
-function checkWinCondition() {
-  const anyAlive = enemies.some(e => e.alive);
-  if (!anyAlive && !gameWon && !upgradePending) {
-    const dz = Math.abs(player.group.position.z - GATE_POSITION.z);
-    const dx = Math.abs(player.group.position.x - GATE_POSITION.x);
-    if (dz < 2 && dx < 2.5) {
-      if (currentFloor < FLOORS.length - 1) {
-        openUpgradeShrine();
-      } else {
-        gameWon = true;
-        endGame(true);
-      }
-    }
-  }
+function handleKO(defenderWasPlayer) {
+  audio.koStinger();
+  triggerHitStop(0.25);
+  ui.showMessage('K.O.!', 1600);
+  if (defenderWasPlayer) p2Wins++; else p1Wins++;
+  matchPhase = 'roundEnd';
+  phaseTimer = 2.4;
 }
 
-function openUpgradeShrine() {
-  upgradePending = true;
-  const choices = pickRandomUpgrades(3);
-  ui.showUpgradeChoices(choices, (choice) => {
-    choice.apply(player);
-    ui.hideUpgradeChoices();
-    currentFloor++;
-    const themeName = spawnFloor(currentFloor, true);
-    ui.showMessage(`FLOOR ${currentFloor + 1} — ${themeName.toUpperCase()}`, 2600);
-    upgradePending = false;
-    clock.getDelta(); // discard the paused-time delta so dt doesn't spike
-  });
+function handleTimeUp() {
+  const playerHealthier = player.health >= opponent.health;
+  ui.showMessage(playerHealthier ? 'TIME UP — YOU LEAD' : 'TIME UP — OPPONENT LEADS', 1600);
+  if (playerHealthier) p1Wins++; else p2Wins++;
+  matchPhase = 'roundEnd';
+  phaseTimer = 2.4;
+}
+
+function resolveRoundEnd() {
+  ui.setRoundPips(p1Wins, p2Wins, WINS_NEEDED);
+
+  if (p2Wins >= WINS_NEEDED) {
+    endGame(false);
+    return;
+  }
+  if (p1Wins >= WINS_NEEDED) {
+    if (currentOpponentIndex >= ROSTER.length - 1) {
+      endGame(true);
+      return;
+    }
+    audio.victoryFanfare();
+    ui.showMessage(`${opponent.name.toUpperCase()} DEFEATED`, 2000);
+    currentOpponentIndex++;
+    currentRound = 1;
+    p1Wins = 0; p2Wins = 0;
+    scene.remove(opponent.group);
+    spawnOpponent(currentOpponentIndex);
+    matchPhase = 'transitioning';
+    phaseTimer = 2.2;
+    return;
+  }
+
+  currentRound++;
+  beginRound(false);
 }
 
 function endGame(won) {
@@ -308,138 +219,100 @@ function endGame(won) {
   const stats = document.getElementById('end-stats');
 
   if (won) {
-    title.textContent = 'ESCAPED';
+    audio.victoryFanfare();
+    title.textContent = 'ARCADE CLEARED';
     title.style.color = '#d4a04f';
     title.style.textShadow = '0 0 30px rgba(212,160,79,0.6)';
-    subtitle.textContent = 'She climbs back into the light, dungeon behind her.';
+    subtitle.textContent = 'Every fighter in the depths has fallen before you.';
   } else {
-    title.textContent = 'YOU DIED';
+    audio.defeatStinger();
+    title.textContent = 'GAME OVER';
     title.style.color = '#c23b46';
-    subtitle.textContent = 'The depth claims another.';
+    subtitle.textContent = `${opponent.name} stands victorious.`;
   }
 
   stats.innerHTML = `
-    Floor Reached: ${currentFloor + 1} / ${FLOORS.length}<br/>
-    Embers Collected: ${player.embers}<br/>
-    Final Sanity: ${Math.round(player.sanity)} / ${player.maxSanity}<br/>
-    Corruption Accrued: ${Math.round(player.corruption)}%<br/>
-    Armor Condition: ${player.armorLabel}<br/>
-    Enemies Defeated: ${enemies.filter(e => !e.alive).length} / ${enemies.length}
+    Fighters Defeated: ${currentOpponentIndex + (won ? 1 : 0)} / ${ROSTER.length}<br/>
+    Final Opponent: ${opponent.name}
   `;
-
   endScreen.classList.remove('hidden');
 }
 
 // ================= Main loop =================
 function loop() {
   if (gameOver) return;
-
-  // Upgrade shrine is up — hold the frame still (just keep rendering) until
-  // the player picks a boon.
-  if (upgradePending) {
-    renderer.render(scene, camera);
-    requestAnimationFrame(loop);
-    return;
-  }
-
   const rawDt = Math.min(clock.getDelta(), 0.05);
-
   let dt = rawDt;
   if (hitStopTimer > 0) {
     hitStopTimer -= rawDt;
-    dt = rawDt * 0.06;
-  } else if (slowMoTimer > 0) {
-    slowMoTimer -= rawDt;
-    dt = rawDt * 0.3;
+    dt = rawDt * 0.08;
   }
 
   input.pollKeyboardMove();
 
-  if (input.lockPressed) {
-    lockedTarget = findLockOnTarget(player.group.position, enemies, lockedTarget);
-    ui.setLockOn(!!lockedTarget);
-  }
-
-  player.update(dt, input, camera);
-
-  if (player.dodgeTriggeredThisFrame) {
-    audio.dodgeWhoosh();
-    const perfected = checkPerfectDodge(player.group.position, enemies);
-    if (perfected) {
-      perfected.interruptWithPerfectDodge();
-      player.refundStamina(22);
-      player.gainSanity(4);
-      audio.perfectChime();
-      triggerSlowMo(0.35);
-      ui.showMessage('PERFECT DODGE — PUNISH!', 1400);
+  // ===== Phase handling =====
+  if (matchPhase === 'intro') {
+    phaseTimer -= dt;
+    if (!introFightShown && phaseTimer <= 0.8) {
+      introFightShown = true;
+      ui.showMessage('FIGHT!', 700);
+      audio.roundStart();
     }
-    player.dodgeTriggeredThisFrame = false;
+    if (phaseTimer <= 0) matchPhase = 'fighting';
+  } else if (matchPhase === 'roundEnd') {
+    phaseTimer -= dt;
+    if (phaseTimer <= 0) resolveRoundEnd();
+  } else if (matchPhase === 'transitioning') {
+    phaseTimer -= dt;
+    if (phaseTimer <= 0) beginRound(false);
+  } else if (matchPhase === 'fighting') {
+    roundTime -= dt;
+    ui.setTimer(roundTime);
+    if (roundTime <= 0) handleTimeUp();
   }
 
-  if (player.potionTriggeredThisFrame) {
-    audio.perfectChime();
-    ui.showMessage('DRINKING FLASK...', 1000);
-    player.potionTriggeredThisFrame = false;
+  // ===== Facing (always toward each other) =====
+  player.faceToward(opponent.group.position);
+  opponent.faceToward(player.group.position);
+
+  // ===== Player control (only during active fighting) =====
+  if (matchPhase === 'fighting') {
+    if (input.lightPressed) player.tryLight();
+    if (input.heavyPressed) player.tryHeavy();
+    if (input.evadePressed) player.tryEvade(opponent.group.position);
+    if (input.specialPressed) player.trySpecial();
+    player.setBlocking(input.blockHeld);
+    player.applyMovement(dt, input.moveX, input.moveY);
+
+    opponentAI.update(dt, player);
+  } else {
+    player.setBlocking(false);
+  }
+
+  player.update(dt);
+  opponent.update(dt);
+
+  clampToStage(player.group.position, arena.stageRadius);
+  clampToStage(opponent.group.position, arena.stageRadius);
+
+  // Boss phase-2 enrage at 50% HP
+  if (opponent.isBoss && !opponent.phase2Triggered && opponent.health <= opponent.maxHealth * 0.5 && opponent.alive) {
+    opponent.phase2Triggered = true;
+    opponent.moveSpeed *= 1.2;
+    triggerHitStop(0.15);
+    ui.showMessage(`${opponent.name.toUpperCase()}'S RAGE AWAKENS`, 2000);
+  }
+
+  // ===== Combat resolution =====
+  if (matchPhase === 'fighting') {
+    resolveAttack(player, opponent, (result, type) => onHitResult(result, type, false));
+    resolveAttack(opponent, player, (result, type) => onHitResult(result, type, true));
   }
 
   updateCamera(dt);
-  updateTreasure(dt);
-
-  for (const enemy of enemies) {
-    enemy.update(dt, player.group.position, (dmg, isGrab, isSlam) => {
-      const wasHealthy = !player.armorBroken;
-      const result = player.takeHit(dmg, isGrab);
-      if (!result.landed) return; // dodged/blocked by i-frames — no feedback, no damage
-
-      if (result.blocked) {
-        audio.blockThud();
-        triggerCamPunch(0.3);
-        return; // no shake/hitstop/message spam for a successfully blocked hit
-      }
-
-      audio.heavyImpact();
-      triggerHitStop(isSlam ? 0.12 : (isGrab ? 0.09 : 0.05));
-      triggerCamPunch(isSlam ? 1.1 : (isGrab ? 0.8 : 0.5));
-      sanityFX.triggerShake(isSlam ? 0.45 : (isGrab ? 0.35 : 0.18), isSlam ? 0.5 : (isGrab ? 0.4 : 0.22));
-      if (isSlam) {
-        ui.showMessage('CAUGHT IN THE SLAM', 1600);
-      } else if (isGrab) {
-        ui.showMessage(wasHealthy ? 'ARMOR BROKEN' : 'STAGGERING BLOW', 1600);
-      }
-    });
-
-    if (enemy.justEnteredPhase2) {
-      enemy.justEnteredPhase2 = false;
-      audio.bossRoar();
-      triggerHitStop(0.15);
-      triggerSlowMo(0.6);
-      sanityFX.triggerShake(0.5, 0.6);
-      ui.showMessage(`${enemy.name.toUpperCase()}'S RAGE AWAKENS`, 2400);
-    }
-  }
-
-  resolvePlayerAttacks(player, enemies, handleEnemyHit);
-  if (player.attackTriggeredThisFrame) {
-    audio.swordSwing();
-    player.attackTriggeredThisFrame = false;
-  }
-
-  sanityFX.update(dt, player, camera);
-  ui.updatePlayerStats(player);
-  ui.updateBoss(bossEnemy);
-
-  checkWinCondition();
-
-  // Sanity is a soft debuff curve now (see Player.sanityDamageMultiplier /
-  // sanitySpeedMultiplier / sanityRegenMultiplier) — it never ends the run.
-  // Only HP loss ends the run.
-  if (!player.alive) {
-    audio.playerDeath();
-    endGame(false);
-  }
+  ui.updateHealth(player, opponent);
 
   input.consumeFrame();
   renderer.render(scene, camera);
-
-  if (!gameOver) requestAnimationFrame(loop);
+  requestAnimationFrame(loop);
 }
