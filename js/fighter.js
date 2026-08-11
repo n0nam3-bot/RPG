@@ -4,9 +4,9 @@ import * as THREE from 'three';
 // live), recovery (vulnerable, can't act). Classic fighting-game frame data,
 // simplified to real-time seconds instead of frame counts.
 const ATTACK_SPECS = {
-  light: { startup: 0.09, active: 0.09, recovery: 0.16, range: 1.7, meterGain: 6 },
-  heavy: { startup: 0.2, active: 0.12, recovery: 0.32, range: 1.95, meterGain: 12 },
-  special: { startup: 0.28, active: 0.22, recovery: 0.45, range: 2.4, meterGain: 0 },
+  light: { startup: 0.09, active: 0.09, recovery: 0.16, range: 1.7, meterGain: 6, knockback: 0.9 },
+  heavy: { startup: 0.2, active: 0.12, recovery: 0.32, range: 1.95, meterGain: 12, knockback: 2.4 },
+  special: { startup: 0.28, active: 0.22, recovery: 0.45, range: 2.4, meterGain: 0, knockback: 4.0 },
 };
 
 // Combo scaling: each successive light in a chain does less damage so
@@ -46,6 +46,12 @@ export class Fighter {
     this.evadeCooldown = 0;
     this.invulnerable = false;
     this.blocking = false;
+
+    // Input buffer: an attack pressed during recovery queues up and fires
+    // the instant recovery ends, instead of being dropped — this is what
+    // makes fighting-game controls feel responsive instead of laggy.
+    this.bufferedAction = null;
+    this.bufferedActionTimer = 0;
 
     this.facing = isPlayer ? Math.PI : 0; // face roughly toward the other fighter's default side
     this.alive = true;
@@ -141,6 +147,17 @@ export class Fighter {
     return true;
   }
 
+  // Preferred entry point for player-controlled input: if the attack can't
+  // fire right now but we're in recovery, buffer it to fire the instant
+  // recovery ends instead of just dropping the input on the floor.
+  inputAttack(type) {
+    const fired = type === 'light' ? this.tryLight() : type === 'heavy' ? this.tryHeavy() : this.trySpecial();
+    if (!fired && this.state === 'attackRecovery') {
+      this.bufferedAction = type;
+      this.bufferedActionTimer = 0.18;
+    }
+  }
+
   tryEvade(awayFromPos) {
     if (!this.canAct || this.evadeCooldown > 0) return false;
     this.state = 'evading';
@@ -188,9 +205,13 @@ export class Fighter {
     return ATTACK_SPECS[this.currentAttackType]?.range ?? 1.7;
   }
 
+  getCurrentAttackKnockback() {
+    return ATTACK_SPECS[this.currentAttackType]?.knockback ?? 0.8;
+  }
+
   // Returns { landed, blocked, ko }. landed=false means i-frames/dead
   // absorbed it entirely — caller should skip all feedback.
-  takeHit(amount, { isSpecial = false } = {}) {
+  takeHit(amount, { isSpecial = false, knockbackDir = null, knockbackForce = 0 } = {}) {
     if (this.invulnerable || !this.alive) return { landed: false, blocked: false, ko: false };
 
     let dmg = amount;
@@ -203,6 +224,11 @@ export class Fighter {
 
     this.health = Math.max(0, this.health - dmg);
     this.meter = Math.min(this.maxMeter, this.meter + dmg * 0.7);
+
+    if (knockbackDir && knockbackForce > 0) {
+      const force = blockedThisHit ? knockbackForce * 0.3 : knockbackForce;
+      this.group.position.addScaledVector(knockbackDir, force);
+    }
 
     if (blockedThisHit) {
       // Absorbed by the guard — brief blockstun, stays in blocking state,
@@ -242,6 +268,8 @@ export class Fighter {
     this.invulnerable = false;
     this.blocking = false;
     this.alive = true;
+    this.bufferedAction = null;
+    this.bufferedActionTimer = 0;
     this.group.position.copy(position);
     this.bodyMesh.rotation.set(0, 0, 0);
     this.weaponMesh.rotation.set(0, 0, 0);
@@ -285,6 +313,11 @@ export class Fighter {
       if (this.stateTimer <= 0) {
         this.state = 'idle';
         this.currentAttackType = null;
+        if (this.bufferedAction) {
+          const action = this.bufferedAction;
+          this.bufferedAction = null;
+          this.inputAttack(action);
+        }
       }
     } else if (this.state === 'evading' || this.state === 'hitstun') {
       this.stateTimer -= dt;
@@ -292,6 +325,11 @@ export class Fighter {
     } else if (this.state === 'blocking') {
       // held externally via setBlocking(); stateTimer just tracks blockstun
       if (this.stateTimer > 0) this.stateTimer -= dt;
+    }
+
+    if (this.bufferedActionTimer > 0) {
+      this.bufferedActionTimer -= dt;
+      if (this.bufferedActionTimer <= 0) this.bufferedAction = null;
     }
 
     // Animation

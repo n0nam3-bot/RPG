@@ -7,11 +7,13 @@ import { buildArena, applyStageTheme, clampToStage } from './arena.js';
 import { UI } from './ui.js';
 import { resolveAttack } from './combat.js';
 import { Audio } from './audio.js';
+import { FX } from './fx.js';
 
 const WINS_NEEDED = 2; // best of 3
 const ROUND_DURATION = 60;
 const P1_START = new THREE.Vector3(-3, 0, 0);
 const P2_START = new THREE.Vector3(3, 0, 0);
+const COMBO_WINDOW = 1.1; // seconds a combo stays "alive" between landed hits
 
 // ================= Age gate =================
 const ageGate = document.getElementById('age-gate');
@@ -28,7 +30,7 @@ document.getElementById('age-deny').addEventListener('click', () => {
 
 // ================= Core three.js setup =================
 let scene, camera, renderer, clock;
-let ui, input, arena;
+let ui, input, arena, fx;
 let player, opponent, opponentAI;
 let currentOpponentIndex = 0;
 let currentRound = 1;
@@ -39,6 +41,10 @@ let phaseTimer = 0;
 let introFightShown = false;
 let gameOver = false;
 
+let comboCount = 0;
+let comboAttackerIsPlayer = null;
+let comboTimer = 0;
+
 const camLookTarget = new THREE.Vector3(0, 1.3, 0);
 let camPerpRef = new THREE.Vector3(0, 0, 1);
 let camPosInitialized = false;
@@ -48,6 +54,17 @@ let camPunch = 0;
 
 function triggerHitStop(d) { hitStopTimer = Math.max(hitStopTimer, d); }
 function triggerCamPunch(a) { camPunch = Math.max(camPunch, a); }
+
+function triggerScreenFlash(color, opacity, duration = 0.18) {
+  const overlay = document.getElementById('fx-overlay');
+  overlay.style.background = color;
+  overlay.style.transition = 'none';
+  overlay.style.opacity = String(opacity);
+  // Force reflow so the next transition actually animates from this value
+  void overlay.offsetWidth;
+  overlay.style.transition = `opacity ${duration}s ease`;
+  overlay.style.opacity = '0';
+}
 
 function initScene() {
   scene = new THREE.Scene();
@@ -71,6 +88,7 @@ function startGame() {
   arena = buildArena(scene);
   ui = new UI();
   input = new InputState();
+  fx = new FX(scene);
 
   player = new Fighter(scene, PLAYER_DEF, P1_START, true);
   spawnOpponent(0);
@@ -102,9 +120,18 @@ function beginRound(firstEver) {
   matchPhase = 'intro';
   phaseTimer = 2.0;
   introFightShown = false;
+  resetCombo();
+  ui.resetTrails();
   ui.setRoundPips(p1Wins, p2Wins, WINS_NEEDED);
   ui.showMessage(`ROUND ${currentRound}`, 1300);
   audio.roundStart();
+}
+
+function resetCombo() {
+  comboCount = 0;
+  comboAttackerIsPlayer = null;
+  comboTimer = 0;
+  ui.hideCombo();
 }
 
 // ================= Camera (dynamic dual-fighter framing) =================
@@ -116,8 +143,6 @@ function updateCamera(dt) {
   const sepNorm = sep.clone().divideScalar(sepDist);
   let perp = new THREE.Vector3(-sepNorm.z, 0, sepNorm.x);
 
-  // Avoid the camera flipping to the opposite side every time the fighters
-  // cross paths — keep whichever side is closer to the previous frame.
   if (perp.dot(camPerpRef) < 0) perp.multiplyScalar(-1);
   camPerpRef.copy(perp);
 
@@ -143,12 +168,13 @@ function updateCamera(dt) {
 }
 
 // ================= Combat feedback =================
-function onHitResult(result, attackType, defenderIsPlayer) {
+function onHitResult(result, attackType, hitPoint, attackerIsPlayer) {
   if (!result.landed) return;
 
   if (result.blocked) {
     audio.blockThud();
     triggerCamPunch(0.3);
+    fx.spawnHitSpark(hitPoint, 0x8fa0b8, false);
     return;
   }
 
@@ -156,20 +182,39 @@ function onHitResult(result, attackType, defenderIsPlayer) {
   else if (attackType === 'heavy') audio.hitHeavy();
   else audio.hitSpecial();
 
+  const isBig = attackType !== 'light';
+  fx.spawnHitSpark(hitPoint, attackType === 'special' ? 0xd4a04f : 0xffffff, isBig);
+
   const stopAmt = attackType === 'special' ? 0.14 : attackType === 'heavy' ? 0.08 : 0.04;
   const punchAmt = attackType === 'special' ? 1.2 : attackType === 'heavy' ? 0.7 : 0.35;
   triggerHitStop(stopAmt);
   triggerCamPunch(punchAmt);
 
+  if (attackType === 'heavy') triggerScreenFlash('#ffffff', 0.12, 0.15);
+  if (attackType === 'special') triggerScreenFlash('#d4a04f', 0.28, 0.25);
+
+  // Combo tracking — consecutive landed (non-blocked) hits from the same
+  // attacker within the combo window.
+  if (comboAttackerIsPlayer === attackerIsPlayer && comboTimer > 0) {
+    comboCount++;
+  } else {
+    comboCount = 1;
+    comboAttackerIsPlayer = attackerIsPlayer;
+  }
+  comboTimer = COMBO_WINDOW;
+  ui.showCombo(comboCount);
+
   if (result.ko) {
-    handleKO(defenderIsPlayer);
+    handleKO(!attackerIsPlayer);
   }
 }
 
 function handleKO(defenderWasPlayer) {
   audio.koStinger();
-  triggerHitStop(0.25);
+  triggerHitStop(0.35);
+  triggerScreenFlash('#c23b46', 0.4, 0.5);
   ui.showMessage('K.O.!', 1600);
+  resetCombo();
   if (defenderWasPlayer) p2Wins++; else p1Wins++;
   matchPhase = 'roundEnd';
   phaseTimer = 2.4;
@@ -271,16 +316,25 @@ function loop() {
     if (roundTime <= 0) handleTimeUp();
   }
 
+  // Combo window countdown (runs regardless of phase so it cleanly expires)
+  if (comboTimer > 0) {
+    comboTimer -= dt;
+    if (comboTimer <= 0) {
+      if (comboCount >= 2) ui.showMessage(`${comboCount} HIT COMBO!`, 1200);
+      resetCombo();
+    }
+  }
+
   // ===== Facing (always toward each other) =====
   player.faceToward(opponent.group.position);
   opponent.faceToward(player.group.position);
 
   // ===== Player control (only during active fighting) =====
   if (matchPhase === 'fighting') {
-    if (input.lightPressed) player.tryLight();
-    if (input.heavyPressed) player.tryHeavy();
+    if (input.lightPressed) player.inputAttack('light');
+    if (input.heavyPressed) player.inputAttack('heavy');
     if (input.evadePressed) player.tryEvade(opponent.group.position);
-    if (input.specialPressed) player.trySpecial();
+    if (input.specialPressed) player.inputAttack('special');
     player.setBlocking(input.blockHeld);
     player.applyMovement(dt, input.moveX, input.moveY);
 
@@ -305,12 +359,14 @@ function loop() {
 
   // ===== Combat resolution =====
   if (matchPhase === 'fighting') {
-    resolveAttack(player, opponent, (result, type) => onHitResult(result, type, false));
-    resolveAttack(opponent, player, (result, type) => onHitResult(result, type, true));
+    resolveAttack(player, opponent, (result, type, hitPoint) => onHitResult(result, type, hitPoint, true));
+    resolveAttack(opponent, player, (result, type, hitPoint) => onHitResult(result, type, hitPoint, false));
   }
 
   updateCamera(dt);
   ui.updateHealth(player, opponent);
+  ui.tick(rawDt); // use unscaled dt so damage trails don't freeze during hit-stop
+  fx.update(dt);
 
   input.consumeFrame();
   renderer.render(scene, camera);
