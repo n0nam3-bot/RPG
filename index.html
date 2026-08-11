@@ -43,17 +43,25 @@
   <div id="hud" class="hidden">
     <div class="fighter-panel left">
       <div class="fighter-name" id="p1-name">THE PALADIN</div>
-      <div class="bar health-bar"><div class="bar-fill" id="p1-health-fill"></div></div>
+      <div class="bar health-bar">
+        <div class="bar-fill-trail" id="p1-health-trail"></div>
+        <div class="bar-fill" id="p1-health-fill"></div>
+      </div>
       <div class="bar meter-bar"><div class="bar-fill" id="p1-meter-fill"></div></div>
       <div class="round-pips" id="p1-pips"></div>
     </div>
 
     <div class="fighter-panel right">
       <div class="fighter-name" id="p2-name">OPPONENT</div>
-      <div class="bar health-bar"><div class="bar-fill" id="p2-health-fill"></div></div>
+      <div class="bar health-bar">
+        <div class="bar-fill-trail" id="p2-health-trail"></div>
+        <div class="bar-fill" id="p2-health-fill"></div>
+      </div>
       <div class="bar meter-bar"><div class="bar-fill" id="p2-meter-fill"></div></div>
       <div class="round-pips" id="p2-pips"></div>
     </div>
+
+    <div class="combo-counter" id="combo-counter"></div>
 
     <div class="hud-top-center">
       <div class="round-timer" id="round-timer">60</div>

@@ -23,6 +23,7 @@ js/arena.js
 js/ui.js
 js/combat.js
 js/audio.js
+js/fx.js
 ```
 
 ## Cleaning up your repo
@@ -75,6 +76,23 @@ js/enemies/floor3.js
   active (hitbox live), and recovery (vulnerable) phase — `js/fighter.js`'s
   `ATTACK_SPECS`. This is what makes attacks punishable/whiffable instead of
   instant.
+- **Input buffering**: pressing an attack during your own recovery queues it
+  to fire the instant recovery ends, instead of the input just being
+  dropped — this is a big part of why real fighting games feel responsive.
+- **Knockback**: every attack pushes the defender back on a clean hit (more
+  from heavy/special), so hits have real physical weight instead of both
+  fighters just standing in place.
+- **Hit sparks & screen flash**: `js/fx.js` spawns a small shard-burst at
+  the impact point on every landed hit (bigger/gold for heavy/special), and
+  heavy/special hits also punch a brief white/gold flash across the whole
+  screen (`triggerScreenFlash` in `main.js`).
+- **Combo counter**: consecutive landed (non-blocked) hits from the same
+  attacker within ~1.1s of each other count as a combo, shown live on
+  screen and called out ("4 HIT COMBO!") when the string ends.
+- **Damage-trail health bars**: the classic Street Fighter/Tekken cue — a
+  pale trail bar drains down slowly to meet the real health bar after
+  damage, so you can see how much you just lost at a glance, not just the
+  current total.
 - **Best-of-3 rounds**: win 2 rounds (KO or higher health when the clock
   hits 0) to win the match and advance the ladder. Round pips show wins for
   both sides; a 60s clock counts down each round.
