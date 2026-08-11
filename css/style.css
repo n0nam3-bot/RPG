@@ -65,8 +65,8 @@ html, body {
 /* ===== FX OVERLAY ===== */
 #fx-overlay {
   position: fixed; inset: 0; z-index: 40; pointer-events: none;
-  box-shadow: inset 0 0 0 0 transparent;
-  transition: box-shadow 0.15s ease;
+  background: #ffffff;
+  opacity: 0;
 }
 
 /* ===== HUD ===== */
@@ -84,12 +84,22 @@ html, body {
 }
 
 .bar { width: 100%; height: 14px; background: rgba(0,0,0,0.55); border: 1px solid var(--panel-border); position: relative; overflow: hidden; margin-bottom: 4px; }
-.bar-fill { height: 100%; width: 100%; transition: width 0.2s ease; }
+.bar-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; z-index: 2; transition: width 0.15s ease; }
+.bar-fill-trail { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; background: #e8d9a8; z-index: 1; }
+.fighter-panel.right .bar-fill,
+.fighter-panel.right .bar-fill-trail { left: auto; right: 0; }
 .health-bar .bar-fill { background: linear-gradient(90deg, var(--blood), var(--blood-bright)); }
-.fighter-panel.right .health-bar .bar-fill { background: linear-gradient(270deg, var(--blood), var(--blood-bright)); float: right; }
+.fighter-panel.right .health-bar .bar-fill { background: linear-gradient(270deg, var(--blood), var(--blood-bright)); }
 .meter-bar { height: 7px; }
-.meter-bar .bar-fill { background: linear-gradient(90deg, var(--violet), var(--violet-bright)); width: 0%; }
-.fighter-panel.right .meter-bar .bar-fill { float: right; }
+.meter-bar .bar-fill { background: linear-gradient(90deg, var(--violet), var(--violet-bright)); width: 0%; z-index: 2; }
+
+.combo-counter {
+  position: absolute; top: 90px; left: 50%; transform: translateX(-50%) scale(0.8);
+  font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--amber-bright); text-shadow: 0 0 16px rgba(212,160,79,0.7);
+  opacity: 0; transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.combo-counter.show { opacity: 1; transform: translateX(-50%) scale(1); }
 
 .round-pips { display: flex; gap: 5px; margin-top: 4px; }
 .fighter-panel.right .round-pips { justify-content: flex-end; }
