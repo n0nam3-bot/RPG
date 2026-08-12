@@ -121,6 +121,24 @@ export class Audio {
     src.start();
   }
 
+  tagSwap() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    [880, 1320].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const gain = this._envGain(0.001, 0.18);
+      const startAt = ctx.currentTime + i * 0.06;
+      gain.gain.setValueAtTime(0, startAt);
+      gain.gain.linearRampToValueAtTime(0.16, startAt + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.18);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(startAt);
+      osc.stop(startAt + 0.2);
+    });
+  }
+
   roundStart() {
     if (!this.ctx) return;
     const ctx = this.ctx;

@@ -1,40 +1,76 @@
-// roster.js — the arcade ladder. Each entry pairs a Fighter stat block with
-// an AI archetype (approach behavior, block/evade reflexes, attack mix).
-// Reuses the enemy identities from the earlier dungeon-crawl build for
-// continuity, reframed as fighters.
+// roster.js — character stat blocks (light/medium/heavy/skill/ultimate) and
+// AI archetypes, plus the player's 2-character team and the ladder of
+// enemy teams.
 
-export const ROSTER = [
-  {
-    def: { name: 'Dungeon Brute', health: 140, speed: 2.0, lightDamage: 8, heavyDamage: 18, specialDamage: 30, color: 0x5a4a3a },
-    archetype: { preferredRange: 1.8, aggression: 0.5, attackChance: 0.5, attackMix: { heavy: 0.55 }, blockChance: 0.25, evadeChance: 0.05, specialAggression: 0.4, decisionInterval: 0.4 },
+export const CHARACTERS = {
+  paladin: {
+    name: 'The Paladin', health: 100, speed: 5.2,
+    lightDamage: 5, mediumDamage: 8, heavyDamage: 14, skillDamage: 18, ultimateDamage: 32,
+    color: 0x2c2534, headColor: 0xcdc4b0,
+    archetype: { preferredRange: 1.8, aggression: 0.6, attackChance: 0.6, attackWeights: { light: 0.45, medium: 0.35, heavy: 0.2 }, blockChance: 0.25, evadeChance: 0.12, skillAggression: 0.35, ultimateAggression: 0.5, decisionInterval: 0.32 },
   },
-  {
-    def: { name: 'Blade Thrall', health: 85, speed: 4.0, lightDamage: 6, heavyDamage: 13, specialDamage: 26, color: 0x3a4a5a },
-    archetype: { preferredRange: 1.6, aggression: 0.85, attackChance: 0.75, attackMix: { heavy: 0.25 }, blockChance: 0.1, evadeChance: 0.15, specialAggression: 0.5, decisionInterval: 0.28 },
+  sistervow: {
+    name: 'Sister Vow', health: 90, speed: 5.8,
+    lightDamage: 4, mediumDamage: 7, heavyDamage: 12, skillDamage: 16, ultimateDamage: 30,
+    color: 0x2f4a45, headColor: 0xcdc4b0,
+    archetype: { preferredRange: 1.7, aggression: 0.75, attackChance: 0.68, attackWeights: { light: 0.55, medium: 0.3, heavy: 0.15 }, blockChance: 0.15, evadeChance: 0.18, skillAggression: 0.4, ultimateAggression: 0.55, decisionInterval: 0.26 },
   },
-  {
-    def: { name: 'Iron Guard', health: 150, speed: 2.3, lightDamage: 7, heavyDamage: 17, specialDamage: 28, color: 0x4a4a52 },
-    archetype: { preferredRange: 1.8, aggression: 0.4, attackChance: 0.45, attackMix: { heavy: 0.5 }, blockChance: 0.45, evadeChance: 0.08, specialAggression: 0.35, decisionInterval: 0.4 },
+  dungeonbrute: {
+    name: 'Dungeon Brute', health: 140, speed: 3.4,
+    lightDamage: 6, mediumDamage: 10, heavyDamage: 18, skillDamage: 22, ultimateDamage: 34,
+    color: 0x5a4a3a, headColor: 0x3a3028,
+    archetype: { preferredRange: 1.85, aggression: 0.5, attackChance: 0.5, attackWeights: { light: 0.3, medium: 0.35, heavy: 0.35 }, blockChance: 0.3, evadeChance: 0.06, skillAggression: 0.35, ultimateAggression: 0.4, decisionInterval: 0.4 },
   },
-  {
-    def: { name: 'Chain Flagellant', health: 95, speed: 3.6, lightDamage: 7, heavyDamage: 14, specialDamage: 27, color: 0x5a2a3a },
-    archetype: { preferredRange: 2.0, aggression: 0.7, attackChance: 0.7, attackMix: { heavy: 0.3 }, blockChance: 0.15, evadeChance: 0.15, specialAggression: 0.5, decisionInterval: 0.3 },
+  bladethrall: {
+    name: 'Blade Thrall', health: 85, speed: 6.4,
+    lightDamage: 4, mediumDamage: 7, heavyDamage: 12, skillDamage: 16, ultimateDamage: 28,
+    color: 0x3a4a5a, headColor: 0x3a3028,
+    archetype: { preferredRange: 1.6, aggression: 0.85, attackChance: 0.75, attackWeights: { light: 0.55, medium: 0.3, heavy: 0.15 }, blockChance: 0.1, evadeChance: 0.16, skillAggression: 0.5, ultimateAggression: 0.5, decisionInterval: 0.24 },
   },
-  {
-    def: { name: 'Sentinel Hulk', health: 180, speed: 1.8, lightDamage: 9, heavyDamage: 20, specialDamage: 34, color: 0x35302a },
-    archetype: { preferredRange: 1.9, aggression: 0.45, attackChance: 0.5, attackMix: { heavy: 0.65 }, blockChance: 0.3, evadeChance: 0.04, specialAggression: 0.45, decisionInterval: 0.42 },
+  ironguard: {
+    name: 'Iron Guard', health: 150, speed: 3.6,
+    lightDamage: 5, mediumDamage: 9, heavyDamage: 16, skillDamage: 20, ultimateDamage: 30,
+    color: 0x4a4a52, headColor: 0x3a3028,
+    archetype: { preferredRange: 1.85, aggression: 0.4, attackChance: 0.45, attackWeights: { light: 0.3, medium: 0.4, heavy: 0.3 }, blockChance: 0.45, evadeChance: 0.08, skillAggression: 0.35, ultimateAggression: 0.35, decisionInterval: 0.4 },
   },
-  {
-    def: { name: 'Shadow Stalker', health: 80, speed: 4.6, lightDamage: 6, heavyDamage: 12, specialDamage: 25, color: 0x1a1a2a },
-    archetype: { preferredRange: 2.1, aggression: 0.6, attackChance: 0.65, attackMix: { heavy: 0.2 }, blockChance: 0.1, evadeChance: 0.25, specialAggression: 0.55, decisionInterval: 0.26 },
+  chainflagellant: {
+    name: 'Chain Flagellant', health: 95, speed: 5.9,
+    lightDamage: 5, mediumDamage: 8, heavyDamage: 13, skillDamage: 18, ultimateDamage: 29,
+    color: 0x5a2a3a, headColor: 0x3a3028,
+    archetype: { preferredRange: 2.0, aggression: 0.7, attackChance: 0.7, attackWeights: { light: 0.4, medium: 0.35, heavy: 0.25 }, blockChance: 0.15, evadeChance: 0.16, skillAggression: 0.45, ultimateAggression: 0.5, decisionInterval: 0.28 },
   },
-  {
-    def: { name: 'The Hollow King', health: 260, speed: 2.8, lightDamage: 10, heavyDamage: 22, specialDamage: 40, color: 0x120a10, isBoss: true },
-    archetype: { preferredRange: 2.0, aggression: 0.65, attackChance: 0.65, attackMix: { heavy: 0.4 }, blockChance: 0.3, evadeChance: 0.18, specialAggression: 0.6, decisionInterval: 0.3 },
+  sentinelhulk: {
+    name: 'Sentinel Hulk', health: 180, speed: 2.9,
+    lightDamage: 7, mediumDamage: 11, heavyDamage: 19, skillDamage: 24, ultimateDamage: 36,
+    color: 0x35302a, headColor: 0x3a3028,
+    archetype: { preferredRange: 1.9, aggression: 0.45, attackChance: 0.5, attackWeights: { light: 0.25, medium: 0.35, heavy: 0.4 }, blockChance: 0.3, evadeChance: 0.04, skillAggression: 0.4, ultimateAggression: 0.4, decisionInterval: 0.42 },
   },
-];
-
-export const PLAYER_DEF = {
-  name: 'The Paladin', health: 100, speed: 3.2, lightDamage: 7, heavyDamage: 15, specialDamage: 32,
-  color: 0x2c2534, headColor: 0xcdc4b0,
+  shadowstalker: {
+    name: 'Shadow Stalker', health: 80, speed: 7.0,
+    lightDamage: 4, mediumDamage: 6, heavyDamage: 11, skillDamage: 15, ultimateDamage: 27,
+    color: 0x1a1a2a, headColor: 0x3a3028,
+    archetype: { preferredRange: 2.1, aggression: 0.6, attackChance: 0.65, attackWeights: { light: 0.5, medium: 0.3, heavy: 0.2 }, blockChance: 0.1, evadeChance: 0.25, skillAggression: 0.5, ultimateAggression: 0.55, decisionInterval: 0.24 },
+  },
+  hollowking: {
+    name: 'The Hollow King', health: 220, speed: 4.2, isBoss: true,
+    lightDamage: 7, mediumDamage: 11, heavyDamage: 20, skillDamage: 25, ultimateDamage: 40,
+    color: 0x120a10, headColor: 0x3a3028,
+    archetype: { preferredRange: 2.0, aggression: 0.65, attackChance: 0.65, attackWeights: { light: 0.35, medium: 0.35, heavy: 0.3 }, blockChance: 0.3, evadeChance: 0.18, skillAggression: 0.5, ultimateAggression: 0.55, decisionInterval: 0.3 },
+  },
+  herald: {
+    name: 'The Herald', health: 150, speed: 4.6, isBoss: true,
+    lightDamage: 6, mediumDamage: 10, heavyDamage: 17, skillDamage: 21, ultimateDamage: 33,
+    color: 0x3a1a2a, headColor: 0x3a3028,
+    archetype: { preferredRange: 1.9, aggression: 0.6, attackChance: 0.6, attackWeights: { light: 0.4, medium: 0.35, heavy: 0.25 }, blockChance: 0.25, evadeChance: 0.14, skillAggression: 0.45, ultimateAggression: 0.5, decisionInterval: 0.3 },
+  },
 };
+
+export const PLAYER_TEAM = ['paladin', 'sistervow'];
+
+// Ladder: each entry is a 2-character enemy team.
+export const LADDER = [
+  { teamName: 'The Brutes', members: ['dungeonbrute', 'bladethrall'] },
+  { teamName: 'The Wardens', members: ['ironguard', 'chainflagellant'] },
+  { teamName: 'The Colossi', members: ['sentinelhulk', 'shadowstalker'] },
+  { teamName: 'The Hollow Court', members: ['hollowking', 'herald'] },
+];

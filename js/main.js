@@ -1,19 +1,19 @@
 import * as THREE from 'three';
 import { InputState, isTouchDevice } from './controls.js';
 import { Fighter } from './fighter.js';
-import { FighterAI } from './ai.js';
-import { ROSTER, PLAYER_DEF } from './roster.js';
+import { FighterAI, shouldAITag } from './ai.js';
+import { Team } from './team.js';
+import { CHARACTERS, PLAYER_TEAM, LADDER } from './roster.js';
 import { buildArena, applyStageTheme, clampToStage } from './arena.js';
 import { UI } from './ui.js';
 import { resolveAttack } from './combat.js';
 import { Audio } from './audio.js';
 import { FX } from './fx.js';
 
-const WINS_NEEDED = 2; // best of 3
-const ROUND_DURATION = 60;
-const P1_START = new THREE.Vector3(-3, 0, 0);
-const P2_START = new THREE.Vector3(3, 0, 0);
-const COMBO_WINDOW = 1.1; // seconds a combo stays "alive" between landed hits
+const MATCH_DURATION = 180;
+const COMBO_WINDOW = 1.1;
+const P1_SPAWN = new THREE.Vector3(-3, 0, 0);
+const P2_SPAWN = new THREE.Vector3(3, 0, 0);
 
 // ================= Age gate =================
 const ageGate = document.getElementById('age-gate');
@@ -28,15 +28,14 @@ document.getElementById('age-deny').addEventListener('click', () => {
   document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#8f8778;font-family:serif;">You may return when eligible.</div>';
 });
 
-// ================= Core three.js setup =================
+// ================= Core state =================
 let scene, camera, renderer, clock;
 let ui, input, arena, fx;
-let player, opponent, opponentAI;
-let currentOpponentIndex = 0;
-let currentRound = 1;
-let p1Wins = 0, p2Wins = 0;
-let roundTime = ROUND_DURATION;
-let matchPhase = 'intro'; // intro, fighting, roundEnd
+let playerTeam, aiTeam;
+let playerAI2 = null; // AI controller for the AI team's active fighter (rebuilt on tag/spawn)
+let currentTeamIndex = 0;
+let matchTime = MATCH_DURATION;
+let matchPhase = 'intro'; // intro, fighting, matchEnd, transitioning
 let phaseTimer = 0;
 let introFightShown = false;
 let gameOver = false;
@@ -45,9 +44,8 @@ let comboCount = 0;
 let comboAttackerIsPlayer = null;
 let comboTimer = 0;
 
-const camLookTarget = new THREE.Vector3(0, 1.3, 0);
-let camPerpRef = new THREE.Vector3(0, 0, 1);
-let camPosInitialized = false;
+let camX = 0;
+let camDist = 10;
 
 let hitStopTimer = 0;
 let camPunch = 0;
@@ -60,7 +58,6 @@ function triggerScreenFlash(color, opacity, duration = 0.18) {
   overlay.style.background = color;
   overlay.style.transition = 'none';
   overlay.style.opacity = String(opacity);
-  // Force reflow so the next transition actually animates from this value
   void overlay.offsetWidth;
   overlay.style.transition = `opacity ${duration}s ease`;
   overlay.style.opacity = '0';
@@ -68,7 +65,7 @@ function triggerScreenFlash(color, opacity, duration = 0.18) {
 
 function initScene() {
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
   renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -83,6 +80,11 @@ function initScene() {
   clock = new THREE.Clock();
 }
 
+function makeFighter(charKey, position, isPlayer) {
+  const def = CHARACTERS[charKey];
+  return new Fighter(scene, charKey, def, position, isPlayer);
+}
+
 function startGame() {
   initScene();
   arena = buildArena(scene);
@@ -90,40 +92,49 @@ function startGame() {
   input = new InputState();
   fx = new FX(scene);
 
-  player = new Fighter(scene, PLAYER_DEF, P1_START, true);
-  spawnOpponent(0);
+  const p1a = makeFighter(PLAYER_TEAM[0], P1_SPAWN, true);
+  const p1b = makeFighter(PLAYER_TEAM[1], P1_SPAWN.clone(), true);
+  playerTeam = new Team([p1a, p1b]);
+
+  spawnAITeam(0);
 
   ui.setHint(isTouchDevice
-    ? 'Drag stick to move · LIGHT / HEAVY / BLOCK (hold) / EVADE / SPECIAL'
-    : 'WASD move · J light · K heavy (or Left/Right click) · Shift hold block · Space evade · E special (at full meter)');
+    ? 'Stick to move · JUMP · L/M/H · SKILL · ULT (full meter) · BLOCK (hold) · EVADE · TAG'
+    : 'A/D move · W jump · J/K/L light/medium/heavy · I skill · U ultimate (full meter) · Shift hold block · Space evade · Q tag');
 
   document.getElementById('restart-btn').addEventListener('click', () => window.location.reload());
 
-  beginRound(true);
+  beginMatch();
   requestAnimationFrame(loop);
 }
 
-function spawnOpponent(index) {
-  const entry = ROSTER[index];
-  opponent = new Fighter(scene, entry.def, P2_START, false);
-  opponent.phase2Triggered = false;
-  opponentAI = new FighterAI(opponent, entry.archetype);
+function spawnAITeam(index) {
+  const entry = LADDER[index];
+  const a = makeFighter(entry.members[0], P2_SPAWN, false);
+  const b = makeFighter(entry.members[1], P2_SPAWN.clone(), false);
+  aiTeam = new Team([a, b]);
+  playerAI2 = new FighterAI(aiTeam.active, CHARACTERS[aiTeam.active.charKey].archetype);
   applyStageTheme(scene, arena, index);
-  ui.setNames(PLAYER_DEF.name, entry.def.name);
-  ui.setLadderProgress(index + 1, ROSTER.length);
+  ui.setLadderProgress(index + 1, LADDER.length);
+  updateNamesUI();
 }
 
-function beginRound(firstEver) {
-  player.resetForNewRound(P1_START);
-  opponent.resetForNewRound(P2_START);
-  roundTime = ROUND_DURATION;
+function updateNamesUI() {
+  ui.setNames(playerTeam.active.name, playerTeam.reserve.name, aiTeam.active.name, aiTeam.reserve.name);
+}
+
+function beginMatch() {
+  playerTeam.resetForNewMatch([P1_SPAWN, P1_SPAWN.clone()]);
+  aiTeam.resetForNewMatch([P2_SPAWN, P2_SPAWN.clone()]);
+  playerAI2 = new FighterAI(aiTeam.active, CHARACTERS[aiTeam.active.charKey].archetype);
+  matchTime = MATCH_DURATION;
   matchPhase = 'intro';
   phaseTimer = 2.0;
   introFightShown = false;
   resetCombo();
   ui.resetTrails();
-  ui.setRoundPips(p1Wins, p2Wins, WINS_NEEDED);
-  ui.showMessage(`ROUND ${currentRound}`, 1300);
+  updateNamesUI();
+  ui.showMessage(`${LADDER[currentTeamIndex].teamName.toUpperCase()}`, 1500);
   audio.roundStart();
 }
 
@@ -134,36 +145,17 @@ function resetCombo() {
   ui.hideCombo();
 }
 
-// ================= Camera (dynamic dual-fighter framing) =================
+// ================= Camera: fixed 2D side view (pan + zoom only) =========
 function updateCamera(dt) {
-  const mid = new THREE.Vector3().addVectors(player.group.position, opponent.group.position).multiplyScalar(0.5);
-  const sep = new THREE.Vector3().subVectors(opponent.group.position, player.group.position);
-  sep.y = 0;
-  const sepDist = Math.max(sep.length(), 0.001);
-  const sepNorm = sep.clone().divideScalar(sepDist);
-  let perp = new THREE.Vector3(-sepNorm.z, 0, sepNorm.x);
+  const midX = (playerTeam.active.group.position.x + aiTeam.active.group.position.x) / 2;
+  const sep = Math.abs(playerTeam.active.group.position.x - aiTeam.active.group.position.x);
+  const targetDist = THREE.MathUtils.clamp(sep * 1.3 + 6.5, 8, 13) - camPunch;
 
-  if (perp.dot(camPerpRef) < 0) perp.multiplyScalar(-1);
-  camPerpRef.copy(perp);
+  camX += (midX - camX) * Math.min(1, dt * 6);
+  camDist += (targetDist - camDist) * Math.min(1, dt * 6);
 
-  const camDist = THREE.MathUtils.clamp(sepDist * 1.5 + 5.5, 7.5 - camPunch, 15 - camPunch);
-  const desiredPos = new THREE.Vector3(
-    mid.x + perp.x * camDist,
-    4.3,
-    mid.z + perp.z * camDist
-  );
-
-  if (!camPosInitialized) {
-    camera.position.copy(desiredPos);
-    camPosInitialized = true;
-  } else {
-    camera.position.lerp(desiredPos, 1 - Math.exp(-7 * dt));
-  }
-
-  const desiredLook = new THREE.Vector3(mid.x, 1.3, mid.z);
-  camLookTarget.lerp(desiredLook, 1 - Math.exp(-7 * dt));
-  camera.lookAt(camLookTarget);
-
+  camera.position.set(camX, 3.1, camDist);
+  camera.lookAt(camX, 1.2, 0);
   camPunch = Math.max(0, camPunch - dt * 6);
 }
 
@@ -179,81 +171,78 @@ function onHitResult(result, attackType, hitPoint, attackerIsPlayer) {
   }
 
   if (attackType === 'light') audio.hitLight();
-  else if (attackType === 'heavy') audio.hitHeavy();
+  else if (attackType === 'medium') audio.hitLight();
+  else if (attackType === 'heavy' || attackType === 'skill') audio.hitHeavy();
   else audio.hitSpecial();
 
-  const isBig = attackType !== 'light';
-  fx.spawnHitSpark(hitPoint, attackType === 'special' ? 0xd4a04f : 0xffffff, isBig);
+  const isBig = attackType === 'heavy' || attackType === 'skill' || attackType === 'ultimate';
+  fx.spawnHitSpark(hitPoint, attackType === 'ultimate' ? 0xd4a04f : 0xffffff, isBig);
 
-  const stopAmt = attackType === 'special' ? 0.14 : attackType === 'heavy' ? 0.08 : 0.04;
-  const punchAmt = attackType === 'special' ? 1.2 : attackType === 'heavy' ? 0.7 : 0.35;
+  const stopAmt = attackType === 'ultimate' ? 0.16 : attackType === 'skill' ? 0.1 : attackType === 'heavy' ? 0.08 : 0.04;
+  const punchAmt = attackType === 'ultimate' ? 1.3 : attackType === 'skill' ? 0.9 : attackType === 'heavy' ? 0.7 : 0.35;
   triggerHitStop(stopAmt);
   triggerCamPunch(punchAmt);
 
   if (attackType === 'heavy') triggerScreenFlash('#ffffff', 0.12, 0.15);
-  if (attackType === 'special') triggerScreenFlash('#d4a04f', 0.28, 0.25);
+  if (attackType === 'skill') triggerScreenFlash('#8a72b8', 0.2, 0.2);
+  if (attackType === 'ultimate') triggerScreenFlash('#d4a04f', 0.3, 0.28);
 
-  // Combo tracking — consecutive landed (non-blocked) hits from the same
-  // attacker within the combo window.
-  if (comboAttackerIsPlayer === attackerIsPlayer && comboTimer > 0) {
-    comboCount++;
-  } else {
-    comboCount = 1;
-    comboAttackerIsPlayer = attackerIsPlayer;
-  }
+  if (comboAttackerIsPlayer === attackerIsPlayer && comboTimer > 0) comboCount++;
+  else { comboCount = 1; comboAttackerIsPlayer = attackerIsPlayer; }
   comboTimer = COMBO_WINDOW;
   ui.showCombo(comboCount);
 
-  if (result.ko) {
-    handleKO(!attackerIsPlayer);
+  if (result.ko) handlePossibleKO(!attackerIsPlayer);
+}
+
+function handlePossibleKO(defenderWasPlayer) {
+  audio.koStinger();
+  triggerHitStop(0.2);
+  const team = defenderWasPlayer ? playerTeam : aiTeam;
+  if (team.isDefeated) {
+    triggerScreenFlash('#c23b46', 0.4, 0.5);
+    resetCombo();
+    matchPhase = 'matchEnd';
+    phaseTimer = 2.2;
+  } else {
+    ui.showMessage(`${team.reserve.name.toUpperCase()} TAGS IN!`, 1400);
   }
 }
 
-function handleKO(defenderWasPlayer) {
-  audio.koStinger();
-  triggerHitStop(0.35);
-  triggerScreenFlash('#c23b46', 0.4, 0.5);
-  ui.showMessage('K.O.!', 1600);
-  resetCombo();
-  if (defenderWasPlayer) p2Wins++; else p1Wins++;
-  matchPhase = 'roundEnd';
-  phaseTimer = 2.4;
-}
-
-function handleTimeUp() {
-  const playerHealthier = player.health >= opponent.health;
-  ui.showMessage(playerHealthier ? 'TIME UP — YOU LEAD' : 'TIME UP — OPPONENT LEADS', 1600);
-  if (playerHealthier) p1Wins++; else p2Wins++;
-  matchPhase = 'roundEnd';
-  phaseTimer = 2.4;
-}
-
-function resolveRoundEnd() {
-  ui.setRoundPips(p1Wins, p2Wins, WINS_NEEDED);
-
-  if (p2Wins >= WINS_NEEDED) {
+function resolveMatchEnd() {
+  if (playerTeam.isDefeated) {
     endGame(false);
     return;
   }
-  if (p1Wins >= WINS_NEEDED) {
-    if (currentOpponentIndex >= ROSTER.length - 1) {
+  if (aiTeam.isDefeated) {
+    if (currentTeamIndex >= LADDER.length - 1) {
       endGame(true);
       return;
     }
     audio.victoryFanfare();
-    ui.showMessage(`${opponent.name.toUpperCase()} DEFEATED`, 2000);
-    currentOpponentIndex++;
-    currentRound = 1;
-    p1Wins = 0; p2Wins = 0;
-    scene.remove(opponent.group);
-    spawnOpponent(currentOpponentIndex);
+    ui.showMessage(`${LADDER[currentTeamIndex].teamName.toUpperCase()} DEFEATED`, 2000);
+    currentTeamIndex++;
+    scene.remove(aiTeam.fighters[0].group);
+    scene.remove(aiTeam.fighters[1].group);
+    spawnAITeam(currentTeamIndex);
     matchPhase = 'transitioning';
     phaseTimer = 2.2;
     return;
   }
-
-  currentRound++;
-  beginRound(false);
+  // Time-up fallback: compare total remaining team health
+  const p1Total = playerTeam.fighters.reduce((s, f) => s + f.health, 0);
+  const p2Total = aiTeam.fighters.reduce((s, f) => s + f.health, 0);
+  if (p1Total >= p2Total) {
+    if (currentTeamIndex >= LADDER.length - 1) { endGame(true); return; }
+    currentTeamIndex++;
+    scene.remove(aiTeam.fighters[0].group);
+    scene.remove(aiTeam.fighters[1].group);
+    spawnAITeam(currentTeamIndex);
+    matchPhase = 'transitioning';
+    phaseTimer = 2.2;
+  } else {
+    endGame(false);
+  }
 }
 
 function endGame(won) {
@@ -268,18 +257,15 @@ function endGame(won) {
     title.textContent = 'ARCADE CLEARED';
     title.style.color = '#d4a04f';
     title.style.textShadow = '0 0 30px rgba(212,160,79,0.6)';
-    subtitle.textContent = 'Every fighter in the depths has fallen before you.';
+    subtitle.textContent = 'Every team in the depths has fallen before you.';
   } else {
     audio.defeatStinger();
     title.textContent = 'GAME OVER';
     title.style.color = '#c23b46';
-    subtitle.textContent = `${opponent.name} stands victorious.`;
+    subtitle.textContent = `${LADDER[currentTeamIndex].teamName} stands victorious.`;
   }
 
-  stats.innerHTML = `
-    Fighters Defeated: ${currentOpponentIndex + (won ? 1 : 0)} / ${ROSTER.length}<br/>
-    Final Opponent: ${opponent.name}
-  `;
+  stats.innerHTML = `Teams Defeated: ${currentTeamIndex + (won ? 1 : 0)} / ${LADDER.length}`;
   endScreen.classList.remove('hidden');
 }
 
@@ -288,14 +274,10 @@ function loop() {
   if (gameOver) return;
   const rawDt = Math.min(clock.getDelta(), 0.05);
   let dt = rawDt;
-  if (hitStopTimer > 0) {
-    hitStopTimer -= rawDt;
-    dt = rawDt * 0.08;
-  }
+  if (hitStopTimer > 0) { hitStopTimer -= rawDt; dt = rawDt * 0.08; }
 
   input.pollKeyboardMove();
 
-  // ===== Phase handling =====
   if (matchPhase === 'intro') {
     phaseTimer -= dt;
     if (!introFightShown && phaseTimer <= 0.8) {
@@ -304,19 +286,18 @@ function loop() {
       audio.roundStart();
     }
     if (phaseTimer <= 0) matchPhase = 'fighting';
-  } else if (matchPhase === 'roundEnd') {
+  } else if (matchPhase === 'matchEnd') {
     phaseTimer -= dt;
-    if (phaseTimer <= 0) resolveRoundEnd();
+    if (phaseTimer <= 0) resolveMatchEnd();
   } else if (matchPhase === 'transitioning') {
     phaseTimer -= dt;
-    if (phaseTimer <= 0) beginRound(false);
+    if (phaseTimer <= 0) beginMatch();
   } else if (matchPhase === 'fighting') {
-    roundTime -= dt;
-    ui.setTimer(roundTime);
-    if (roundTime <= 0) handleTimeUp();
+    matchTime -= dt;
+    ui.setTimer(matchTime);
+    if (matchTime <= 0) { matchPhase = 'matchEnd'; phaseTimer = 0.1; }
   }
 
-  // Combo window countdown (runs regardless of phase so it cleanly expires)
   if (comboTimer > 0) {
     comboTimer -= dt;
     if (comboTimer <= 0) {
@@ -325,47 +306,68 @@ function loop() {
     }
   }
 
-  // ===== Facing (always toward each other) =====
-  player.faceToward(opponent.group.position);
-  opponent.faceToward(player.group.position);
+  const p1 = playerTeam.active;
+  const p2 = aiTeam.active;
+  p1.faceToward(p2.group.position.x);
+  p2.faceToward(p1.group.position.x);
 
-  // ===== Player control (only during active fighting) =====
   if (matchPhase === 'fighting') {
-    if (input.lightPressed) player.inputAttack('light');
-    if (input.heavyPressed) player.inputAttack('heavy');
-    if (input.evadePressed) player.tryEvade(opponent.group.position);
-    if (input.specialPressed) player.inputAttack('special');
-    player.setBlocking(input.blockHeld);
-    player.applyMovement(dt, input.moveX, input.moveY);
+    if (input.jumpPressed) p1.tryJump();
+    if (input.lightPressed) p1.inputAttack('light');
+    if (input.mediumPressed) p1.inputAttack('medium');
+    if (input.heavyPressed) p1.inputAttack('heavy');
+    if (input.skillPressed) p1.inputAttack('skill');
+    if (input.ultimatePressed) p1.inputAttack('ultimate');
+    if (input.evadePressed) p1.tryEvade(p2.group.position.x);
+    if (input.tagPressed) {
+      if (playerTeam.tryTag()) {
+        audio.tagSwap();
+        ui.showMessage(`TAG IN: ${playerTeam.active.name.toUpperCase()}`, 1200);
+        updateNamesUI();
+      }
+    }
+    p1.setBlocking(input.blockHeld);
+    p1.applyMovement(dt, input.moveX);
 
-    opponentAI.update(dt, player);
+    playerAI2.update(dt, p1);
+    if (shouldAITag(p2, aiTeam.reserve)) {
+      if (aiTeam.tryTag()) {
+        audio.tagSwap();
+        playerAI2 = new FighterAI(aiTeam.active, CHARACTERS[aiTeam.active.charKey].archetype);
+        ui.showMessage(`${aiTeam.active.name.toUpperCase()} TAGS IN`, 1200);
+        updateNamesUI();
+      }
+    }
   } else {
-    player.setBlocking(false);
+    p1.setBlocking(false);
   }
 
-  player.update(dt);
-  opponent.update(dt);
+  playerTeam.fighters.forEach(f => f.update(dt));
+  aiTeam.fighters.forEach(f => f.update(dt));
 
-  clampToStage(player.group.position, arena.stageRadius);
-  clampToStage(opponent.group.position, arena.stageRadius);
+  clampToStage(playerTeam.active.group, arena.stageHalfWidth);
+  clampToStage(aiTeam.active.group, arena.stageHalfWidth);
 
-  // Boss phase-2 enrage at 50% HP
-  if (opponent.isBoss && !opponent.phase2Triggered && opponent.health <= opponent.maxHealth * 0.5 && opponent.alive) {
-    opponent.phase2Triggered = true;
-    opponent.moveSpeed *= 1.2;
-    triggerHitStop(0.15);
-    ui.showMessage(`${opponent.name.toUpperCase()}'S RAGE AWAKENS`, 2000);
+  // Mandatory auto-tag on KO (both sides)
+  if (matchPhase === 'fighting' || matchPhase === 'matchEnd') {
+    if (playerTeam.checkMandatoryTag()) {
+      updateNamesUI();
+      ui.showMessage(`${playerTeam.active.name.toUpperCase()} TAGS IN!`, 1400);
+    }
+    if (aiTeam.checkMandatoryTag()) {
+      playerAI2 = new FighterAI(aiTeam.active, CHARACTERS[aiTeam.active.charKey].archetype);
+      updateNamesUI();
+    }
   }
 
-  // ===== Combat resolution =====
   if (matchPhase === 'fighting') {
-    resolveAttack(player, opponent, (result, type, hitPoint) => onHitResult(result, type, hitPoint, true));
-    resolveAttack(opponent, player, (result, type, hitPoint) => onHitResult(result, type, hitPoint, false));
+    resolveAttack(playerTeam.active, aiTeam.active, (result, type, hitPoint) => onHitResult(result, type, hitPoint, true));
+    resolveAttack(aiTeam.active, playerTeam.active, (result, type, hitPoint) => onHitResult(result, type, hitPoint, false));
   }
 
   updateCamera(dt);
-  ui.updateHealth(player, opponent);
-  ui.tick(rawDt); // use unscaled dt so damage trails don't freeze during hit-stop
+  ui.updateHealth(playerTeam, aiTeam);
+  ui.tick(rawDt);
   fx.update(dt);
 
   input.consumeFrame();
