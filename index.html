@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>DEPTH ARENA</title>
+<title>DEPTH TOKON</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css" />
@@ -22,8 +22,8 @@
   <!-- ===== AGE GATE ===== -->
   <div id="age-gate">
     <div class="age-gate-panel">
-      <h1>DEPTH ARENA</h1>
-      <p class="age-gate-sub">A dark arena fighter. Viewer discretion advised.</p>
+      <h1>DEPTH TOKON</h1>
+      <p class="age-gate-sub">A dark 2D tag-team fighter. Viewer discretion advised.</p>
       <p class="age-gate-text">
         This game contains stylized combat and dark fantasy themes.
         You must confirm you are <strong>18 years of age or older</strong> to continue.
@@ -35,40 +35,38 @@
     </div>
   </div>
 
-  <!-- ===== CANVAS ===== -->
   <canvas id="game-canvas"></canvas>
   <div id="fx-overlay"></div>
 
   <!-- ===== HUD ===== -->
   <div id="hud" class="hidden">
-    <div class="fighter-panel left">
+    <div class="team-panel left">
       <div class="fighter-name" id="p1-name">THE PALADIN</div>
-      <div class="bar health-bar">
-        <div class="bar-fill-trail" id="p1-health-trail"></div>
-        <div class="bar-fill" id="p1-health-fill"></div>
-      </div>
+      <div class="bar health-bar main"><div class="bar-fill-trail" id="p1-health-trail"></div><div class="bar-fill" id="p1-health-fill"></div></div>
+      <div class="bar health-bar reserve"><div class="bar-fill" id="p1r-health-fill"></div></div>
+      <div class="reserve-name" id="p1r-name">SISTER VOW</div>
       <div class="bar meter-bar"><div class="bar-fill" id="p1-meter-fill"></div></div>
-      <div class="round-pips" id="p1-pips"></div>
-    </div>
-
-    <div class="fighter-panel right">
-      <div class="fighter-name" id="p2-name">OPPONENT</div>
-      <div class="bar health-bar">
-        <div class="bar-fill-trail" id="p2-health-trail"></div>
-        <div class="bar-fill" id="p2-health-fill"></div>
+      <div class="status-row">
+        <span class="status-chip" id="p1-skill-chip">SKILL</span>
+        <span class="status-chip" id="p1-tag-chip">TAG READY</span>
       </div>
-      <div class="bar meter-bar"><div class="bar-fill" id="p2-meter-fill"></div></div>
-      <div class="round-pips" id="p2-pips"></div>
     </div>
 
-    <div class="combo-counter" id="combo-counter"></div>
+    <div class="team-panel right">
+      <div class="fighter-name" id="p2-name">OPPONENT</div>
+      <div class="bar health-bar main"><div class="bar-fill-trail" id="p2-health-trail"></div><div class="bar-fill" id="p2-health-fill"></div></div>
+      <div class="bar health-bar reserve"><div class="bar-fill" id="p2r-health-fill"></div></div>
+      <div class="reserve-name" id="p2r-name">ALLY</div>
+      <div class="bar meter-bar"><div class="bar-fill" id="p2-meter-fill"></div></div>
+    </div>
 
     <div class="hud-top-center">
-      <div class="round-timer" id="round-timer">60</div>
-      <div class="ladder-progress" id="ladder-progress">FIGHTER 1 / 7</div>
+      <div class="match-timer" id="match-timer">180</div>
+      <div class="ladder-progress" id="ladder-progress">TEAM 1 / 4</div>
     </div>
 
     <div class="hud-center-msg" id="center-msg"></div>
+    <div class="combo-counter" id="combo-counter"></div>
 
     <!-- Touch controls, shown only on touch devices -->
     <div id="touch-controls" class="hidden">
@@ -77,10 +75,14 @@
       </div>
       <div id="touch-buttons">
         <button id="btn-block" class="touch-btn block">BLOCK</button>
+        <button id="btn-jump" class="touch-btn">JUMP</button>
         <button id="btn-evade" class="touch-btn">EVADE</button>
-        <button id="btn-light" class="touch-btn primary">LIGHT</button>
-        <button id="btn-heavy" class="touch-btn heavy">HEAVY</button>
-        <button id="btn-special" class="touch-btn special">SPECIAL</button>
+        <button id="btn-tag" class="touch-btn tag">TAG</button>
+        <button id="btn-light" class="touch-btn primary">L</button>
+        <button id="btn-medium" class="touch-btn medium">M</button>
+        <button id="btn-heavy" class="touch-btn heavy">H</button>
+        <button id="btn-skill" class="touch-btn skill">SKILL</button>
+        <button id="btn-ultimate" class="touch-btn ultimate">ULT</button>
       </div>
     </div>
 
