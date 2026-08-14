@@ -102,15 +102,15 @@ referenced by anything.
 
 | Action | Desktop | Mobile |
 |---|---|---|
-| Move | A/D or arrows | Left virtual stick |
-| Jump | W or Up | JUMP button (or flick stick up) |
-| Light | J or Left click | L button |
-| Medium | K | M button |
-| Heavy | L or Right click | H button |
-| Skill (30% meter) | I | SKILL button |
-| Ultimate (100% meter) | U | ULT button |
-| Block (hold) | Shift | BLOCK button (hold) |
-| Evade | Space | EVADE button |
+| Move | Arrow Left/Right | Left virtual stick |
+| Jump | Arrow Up | JUMP button (or flick stick up) |
+| Light | A or Left click | L button |
+| Medium | S | M button |
+| Heavy | D or Right click | H button |
+| Skill (30% meter) | F | SKILL button |
+| Ultimate (100% meter) | G | ULT button |
+| Block (hold) | Space | BLOCK button (hold) |
+| Evade | Shift | EVADE button |
 | Tag | Q or Tab | TAG button |
 
 ## Extending it
