@@ -149,6 +149,42 @@ html, body {
 .touch-btn.block { border-color: var(--bone); color: var(--bone); background: rgba(205,196,176,0.12); }
 .touch-btn.tag { border-color: var(--teal); color: var(--teal); background: rgba(58,138,122,0.2); }
 
+/* ===== CHARACTER SELECT ===== */
+#select-screen {
+  position: fixed; inset: 0; z-index: 95;
+  background: radial-gradient(ellipse at center, #16121c 0%, var(--void) 82%);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.select-panel { text-align: center; max-width: 720px; width: 100%; }
+.select-panel h2 {
+  font-family: var(--font-display); font-size: 1.6rem; letter-spacing: 0.2em;
+  color: var(--gold); text-shadow: 0 0 24px rgba(184,151,79,0.5); margin-bottom: 6px;
+}
+.select-sub { color: var(--bone-dim); font-style: italic; margin-bottom: 24px; }
+#select-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px;
+}
+@media (min-width: 500px) { #select-grid { grid-template-columns: repeat(4, 1fr); } }
+.select-card {
+  background: linear-gradient(180deg, rgba(20,18,26,0.9), rgba(10,9,13,0.95));
+  border: 2px solid var(--panel-border);
+  padding: 14px 8px; cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+}
+.select-card:hover { transform: translateY(-2px); }
+.select-card.chosen { border-color: var(--gold); box-shadow: 0 0 14px rgba(184,151,79,0.4); }
+.select-swatch { width: 44px; height: 44px; border-radius: 50%; margin: 0 auto 8px; }
+.select-card-name { font-family: var(--font-display); font-size: 0.68rem; letter-spacing: 0.04em; color: var(--bone); }
+.select-team-preview { display: flex; gap: 16px; justify-content: center; margin-bottom: 22px; }
+.select-slot {
+  font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.06em;
+  color: var(--bone-dim); border: 1px solid var(--panel-border); padding: 8px 16px;
+}
+#select-confirm {
+  font-family: var(--font-display); letter-spacing: 0.1em; padding: 12px 26px;
+  background: transparent; border: 1px solid var(--gold); color: var(--gold); cursor: pointer;
+}
+#select-confirm:disabled { opacity: 0.35; cursor: not-allowed; }
+#select-confirm:not(:disabled):hover { background: rgba(184,151,79,0.1); }
 /* ===== END SCREEN ===== */
 #end-screen {
   position: fixed; inset: 0; z-index: 90;
