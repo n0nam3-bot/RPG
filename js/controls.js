@@ -25,19 +25,21 @@ export class InputState {
   _setupKeyboard() {
     window.addEventListener('keydown', (e) => {
       this._keys[e.code] = true;
-      if (e.code === 'Space') this.evadePressed = true;
-      if (e.code === 'KeyJ') this.lightPressed = true;
-      if (e.code === 'KeyK') this.mediumPressed = true;
-      if (e.code === 'KeyL') this.heavyPressed = true;
-      if (e.code === 'KeyI') this.skillPressed = true;
-      if (e.code === 'KeyU') this.ultimatePressed = true;
+      // Left hand rests on A/S/D/F/G — every action is one small reach away.
+      if (e.code === 'KeyA') this.lightPressed = true;
+      if (e.code === 'KeyS') this.mediumPressed = true;
+      if (e.code === 'KeyD') this.heavyPressed = true;
+      if (e.code === 'KeyF') this.skillPressed = true;
+      if (e.code === 'KeyG') this.ultimatePressed = true;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.evadePressed = true;
+      if (e.code === 'Space') this.blockHeld = true;
       if (e.code === 'KeyQ' || e.code === 'Tab') { this.tagPressed = true; e.preventDefault(); }
-      if (e.code === 'KeyW' || e.code === 'ArrowUp') this.jumpPressed = true;
-      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.blockHeld = true;
+      // Right hand (or either hand) on the arrow cluster for movement/jump.
+      if (e.code === 'ArrowUp') this.jumpPressed = true;
     });
     window.addEventListener('keyup', (e) => {
       this._keys[e.code] = false;
-      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.blockHeld = false;
+      if (e.code === 'Space') this.blockHeld = false;
     });
   }
 
@@ -107,8 +109,8 @@ export class InputState {
   pollKeyboardMove() {
     if (isTouchDevice) return;
     let x = 0;
-    if (this._keys['KeyA'] || this._keys['ArrowLeft']) x -= 1;
-    if (this._keys['KeyD'] || this._keys['ArrowRight']) x += 1;
+    if (this._keys['ArrowLeft']) x -= 1;
+    if (this._keys['ArrowRight']) x += 1;
     this.moveX = x;
   }
 

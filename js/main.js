@@ -45,7 +45,7 @@ let comboAttackerIsPlayer = null;
 let comboTimer = 0;
 
 let camX = 0;
-let camDist = 10;
+let camDist = 7.5;
 
 let hitStopTimer = 0;
 let camPunch = 0;
@@ -100,7 +100,7 @@ function startGame() {
 
   ui.setHint(isTouchDevice
     ? 'Stick to move · JUMP · L/M/H · SKILL · ULT (full meter) · BLOCK (hold) · EVADE · TAG'
-    : 'A/D move · W jump · J/K/L light/medium/heavy · I skill · U ultimate (full meter) · Shift hold block · Space evade · Q tag');
+    : '\u2190/\u2192 move · \u2191 jump · A/S/D light/medium/heavy · F skill · G ultimate (full meter) · Space hold block · Shift evade · Q tag');
 
   document.getElementById('restart-btn').addEventListener('click', () => window.location.reload());
 
@@ -149,7 +149,7 @@ function resetCombo() {
 function updateCamera(dt) {
   const midX = (playerTeam.active.group.position.x + aiTeam.active.group.position.x) / 2;
   const sep = Math.abs(playerTeam.active.group.position.x - aiTeam.active.group.position.x);
-  const targetDist = THREE.MathUtils.clamp(sep * 1.3 + 6.5, 8, 13) - camPunch;
+  const targetDist = THREE.MathUtils.clamp(sep * 1.15 + 4.5, 6, 9.5) - camPunch;
 
   camX += (midX - camX) * Math.min(1, dt * 6);
   camDist += (targetDist - camDist) * Math.min(1, dt * 6);

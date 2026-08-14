@@ -49,6 +49,7 @@ export class Fighter {
     this.blocking = false;
 
     this.velocityY = 0;
+    this.isAirborne = false;
     this.groundY = position.y;
 
     this.comboHitsLanded = 0; // consecutive hits landed without opponent escaping hitstun
@@ -96,6 +97,24 @@ export class Fighter {
     this.attackOrigin = new THREE.Object3D();
     this.attackOrigin.position.set(0, 1.1, 0);
     this.group.add(this.attackOrigin);
+
+    // Clear block indicator — a translucent shield plane, much easier to
+    // read at a glance than a subtle weapon-angle change.
+    const shieldMat = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0, side: THREE.DoubleSide });
+    const shield = new THREE.Mesh(new THREE.PlaneGeometry(0.6 * scale, 1.3 * scale), shieldMat);
+    shield.position.set(0.45 * scale, 1.05 * scale, 0.3);
+    this.group.add(shield);
+    this.shieldMesh = shield;
+
+    // Ground shadow — helps read spacing and jump height against a flat
+    // stage. Its local Y gets compensated each frame in update() so it
+    // stays pinned to ground level even while the parent group is airborne.
+    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 });
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.5 * scale, 20), shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.set(0, 0.01, 0);
+    this.group.add(shadow);
+    this.shadowMesh = shadow;
   }
 
   getAttackWorldPosition() {
@@ -123,15 +142,16 @@ export class Fighter {
     if (!this.canAct) return;
     if (Math.abs(moveX) > 0.05) {
       this.group.position.x += moveX * this.moveSpeed * dt;
-      if (this.state !== 'jumping') this.state = 'moving';
+      if (this.state === 'idle') this.state = 'moving'; // don't clobber 'jumping'
     } else if (this.state === 'moving') {
       this.state = 'idle';
     }
   }
 
   tryJump() {
-    if (this.state !== 'idle' && this.state !== 'moving') return false;
+    if (this.isAirborne || (this.state !== 'idle' && this.state !== 'moving')) return false;
     this.state = 'jumping';
+    this.isAirborne = true;
     this.velocityY = JUMP_VELOCITY;
     return true;
   }
@@ -285,6 +305,7 @@ export class Fighter {
     this.bufferedAction = null;
     this.bufferedActionTimer = 0;
     this.velocityY = 0;
+    this.isAirborne = false;
     this.group.position.copy(position);
     this.group.position.y = this.groundY;
     this.bodyMesh.rotation.set(0, 0, 0);
@@ -296,12 +317,15 @@ export class Fighter {
   }
 
   // Called when tagged in — brief invulnerability so tag-ins aren't a free
-  // punish, matching real tag-fighter conventions.
+  // punish, matching real tag-fighter conventions. Always enters grounded.
   tagIn() {
     this.benched = false;
     this.setVisible(true);
     this.state = 'idle';
     this.comboHitsLanded = 0;
+    this.isAirborne = false;
+    this.velocityY = 0;
+    this.group.position.y = this.groundY;
     this.invulnerable = true;
     setTimeout(() => { this.invulnerable = false; }, 250);
   }
@@ -310,6 +334,9 @@ export class Fighter {
     this.benched = true;
     this.setVisible(false);
     this.blocking = false;
+    this.isAirborne = false;
+    this.velocityY = 0;
+    this.group.position.y = this.groundY;
   }
 
   // ================= Update =================
@@ -326,17 +353,28 @@ export class Fighter {
 
     if (this.auraMesh) this.auraMesh.rotation.z += dt * 0.6;
 
+    // Keep the ground shadow pinned to the floor even while airborne, and
+    // shrink it slightly with height for a clearer "how high am I" read.
+    const heightAboveGround = this.group.position.y - this.groundY;
+    this.shadowMesh.position.y = 0.01 - heightAboveGround;
+    const shadowScale = Math.max(0.5, 1 - heightAboveGround * 0.15);
+    this.shadowMesh.scale.setScalar(shadowScale);
+    this.shadowMesh.material.opacity = 0.35 * shadowScale;
+
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
     if (this.evadeCooldown > 0) this.evadeCooldown -= dt;
 
-    // Jump physics
-    if (this.state === 'jumping') {
+    // Jump physics — runs off isAirborne, not the state label, so attacking
+    // mid-jump (state becomes 'attackWindup') doesn't freeze the fighter
+    // in the air forever.
+    if (this.isAirborne) {
       this.velocityY += GRAVITY * dt;
       this.group.position.y += this.velocityY * dt;
       if (this.group.position.y <= this.groundY) {
         this.group.position.y = this.groundY;
         this.velocityY = 0;
-        this.state = 'idle';
+        this.isAirborne = false;
+        if (this.state === 'jumping') this.state = 'idle';
       }
     }
 
@@ -395,14 +433,17 @@ export class Fighter {
       this.weaponMesh.rotation.z = startAngle + t * arc;
       const scaleAmt = this.currentAttackType === 'ultimate' ? 1.7 : this.currentAttackType === 'skill' ? 1.4 : this.currentAttackType === 'heavy' ? 1.3 : 1.0;
       this.weaponMesh.scale.setScalar(scaleAmt);
+      this.shieldMesh.material.opacity = 0;
     } else if (this.state === 'blocking') {
       this.weaponMesh.rotation.z = -1.65;
       this.weaponMesh.rotation.x = -0.3;
       this.weaponMesh.scale.setScalar(1.0);
+      this.shieldMesh.material.opacity = 0.55;
     } else {
       this.weaponMesh.rotation.z = 0;
       this.weaponMesh.rotation.x = 0;
       this.weaponMesh.scale.setScalar(1.0);
+      this.shieldMesh.material.opacity = 0;
     }
 
     this.group.rotation.y = this.facing > 0 ? Math.PI / 2 : -Math.PI / 2;
