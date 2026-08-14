@@ -38,6 +38,20 @@
   <canvas id="game-canvas"></canvas>
   <div id="fx-overlay"></div>
 
+  <!-- ===== CHARACTER SELECT ===== -->
+  <div id="select-screen" class="hidden">
+    <div class="select-panel">
+      <h2>CHOOSE YOUR TEAM</h2>
+      <p class="select-sub">Pick 2 fighters. First pick enters the fight first.</p>
+      <div id="select-grid"></div>
+      <div class="select-team-preview">
+        <span class="select-slot" id="select-slot-1">SLOT 1: —</span>
+        <span class="select-slot" id="select-slot-2">SLOT 2: —</span>
+      </div>
+      <button id="select-confirm" disabled>Enter the Arena</button>
+    </div>
+  </div>
+
   <!-- ===== HUD ===== -->
   <div id="hud" class="hidden">
     <div class="team-panel left">
@@ -75,7 +89,6 @@
       </div>
       <div id="touch-buttons">
         <button id="btn-block" class="touch-btn block">BLOCK</button>
-        <button id="btn-jump" class="touch-btn">JUMP</button>
         <button id="btn-evade" class="touch-btn">EVADE</button>
         <button id="btn-tag" class="touch-btn tag">TAG</button>
         <button id="btn-light" class="touch-btn primary">L</button>

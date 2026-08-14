@@ -47,7 +47,32 @@ js/ui.js
 js/combat.js
 js/audio.js
 js/fx.js
+assets/models/female_ranger/Female_Ranger.gltf
+assets/models/female_ranger/Female_Ranger.bin
+assets/models/female_ranger/T_Ranger_BaseColor.png
+assets/models/female_ranger/T_Ranger_Normal.png
+assets/models/female_ranger/T_Ranger_ORM.png
+assets/models/female_ranger/T_Regular_Female_Dark_BaseColor.png
+assets/models/female_ranger/T_Regular_Female_Normal.png
+assets/models/female_ranger/T_Regular_Female_Roughness.png
+assets/models/female_peasant/Female_Peasant.gltf
+assets/models/female_peasant/Female_Peasant.bin
+assets/models/female_peasant/T_Peasant_BaseColor.png
+assets/models/female_peasant/T_Peasant_Normal.png
+assets/models/female_peasant/T_Peasant_ORM.png
+assets/models/female_peasant/T_Regular_Female_Dark_BaseColor.png
+assets/models/female_peasant/T_Regular_Female_Normal.png
+assets/models/female_peasant/T_Regular_Female_Roughness.png
+assets/animations/UAL2_Standard.glb
 ```
+
+**The `assets/` folder is new (~84MB total)** — real mesh, texture, and
+animation data from the packs you uploaded (Modular Character Outfits -
+Fantasy, and Universal Animation Library 2). Nothing in that folder existed
+in earlier versions of this repo. All files are well under GitHub's 100MB
+per-file limit, but this does meaningfully grow your repo size and initial
+page-load time — see "Real assets" below for what's actually happening and
+how to trim it down if load time matters to you.
 
 ## Cleaning up your repo
 
@@ -98,6 +123,49 @@ referenced by anything.
   matchup.
 - **Age gate**: unchanged — confirmation screen blocks entry until 18+.
 
+## Real assets: The Ranger & The Wanderer
+
+Two new selectable characters use actual assets from the packs you
+uploaded, loaded via Three.js's `GLTFLoader` instead of primitive shapes:
+
+- **Mesh + textures**: `Female_Ranger` and `Female_Peasant` from *Modular
+  Character Outfits - Fantasy*, glTF export (already self-contained —
+  mesh, skeleton, and all referenced textures sitting in one folder).
+- **Animations**: *Universal Animation Library 2*'s `UAL2_Standard.glb`,
+  loaded once and shared across every model-based fighter (not re-fetched
+  per character). I checked this against the character mesh's skeleton
+  before wiring anything up — both use the exact same bone names and
+  hierarchy (`Head`, `neck_01`, `clavicle_l`, `upperarm_l`, etc.), which is
+  why the animations play correctly on a mesh from a *different* pack: Three
+  .js's `AnimationMixer` binds clip tracks by bone name, and the names match.
+- **Move mapping** (`animMap` in `js/roster.js`): light attacks cycle
+  through `Sword_Regular_A/B/C` for visual variety across a combo string,
+  medium uses `OverhandThrow`, heavy/ultimate use `Sword_Heavy_Combo`, skill
+  uses `Melee_Hook`, block holds `Sword_Block`, evade plays `Sword_Dash`,
+  getting hit plays `Hit_Knockback`, and jump uses the `NinjaJump_*`
+  sequence. Playback speed is auto-scaled so each attack clip finishes
+  right as the move's active/recovery window ends, so the animation and the
+  actual hitbox timing stay in sync.
+- **Fallback safety**: if a model fails to load (bad path, missing file),
+  that fighter automatically falls back to the primitive-mesh look instead
+  of just being invisible — check the browser console for the error if that
+  happens.
+
+**One thing I could not verify**: which direction the character model faces
+by default. I don't have a way to render the scene here, so I picked `0`
+for `modelYOffset` (no correction) as a starting guess. If The Ranger or The
+Wanderer appears to be facing sideways or backwards in-game, open
+`js/roster.js` and change that character's `modelYOffset` to `Math.PI`
+(180°), `Math.PI / 2`, or `-Math.PI / 2` — whichever one makes her face the
+opponent correctly. That's a one-line fix once you can see it in the
+browser.
+
+**Trimming file size**: the normal/roughness maps in these packs are quite
+high-resolution (10-14MB each as PNGs). If load time matters, re-exporting
+them at a smaller resolution (1024px is usually plenty for a character this
+size on screen) or converting to `.webp` would cut the `assets/` folder down
+substantially without a visible quality loss at gameplay distance.
+
 ## Controls reference
 
 | Action | Desktop | Mobile |
@@ -122,5 +190,7 @@ referenced by anything.
   `js/roster.js` — no new code needed for simple stat variants.
 - **Character select**: gate `startGame()` behind a screen that lets the
   player choose 2 keys from `CHARACTERS` before building `PLAYER_TEAM`.
-- **Visuals**: swap the primitive Three.js meshes for GLTF models via
-  `GLTFLoader` in `Fighter._buildMesh()`.
+- **More real-model characters**: follow the same pattern as The
+  Ranger/Wanderer in `js/roster.js` — add `modelPath`, `modelYOffset`, and
+  `animMap` to any character def and `Fighter` will load it via
+  `GLTFLoader` automatically, no code changes needed.
