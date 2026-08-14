@@ -99,7 +99,6 @@ export class InputState {
     bind('btn-ultimate', 'ultimatePressed');
     bind('btn-evade', 'evadePressed');
     bind('btn-tag', 'tagPressed');
-    bind('btn-jump', 'jumpPressed');
 
     const blockBtn = document.getElementById('btn-block');
     blockBtn.addEventListener('touchstart', (e) => { this.blockHeld = true; e.preventDefault(); });

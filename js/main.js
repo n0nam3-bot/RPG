@@ -3,7 +3,7 @@ import { InputState, isTouchDevice } from './controls.js';
 import { Fighter } from './fighter.js';
 import { FighterAI, shouldAITag } from './ai.js';
 import { Team } from './team.js';
-import { CHARACTERS, PLAYER_TEAM, LADDER } from './roster.js';
+import { CHARACTERS, LADDER } from './roster.js';
 import { buildArena, applyStageTheme, clampToStage } from './arena.js';
 import { UI } from './ui.js';
 import { resolveAttack } from './combat.js';
@@ -21,11 +21,66 @@ const audio = new Audio();
 document.getElementById('age-confirm').addEventListener('click', () => {
   audio.unlock();
   ageGate.classList.add('hidden');
-  document.getElementById('hud').classList.remove('hidden');
-  startGame();
+  showSelectScreen();
 });
 document.getElementById('age-deny').addEventListener('click', () => {
   document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#8f8778;font-family:serif;">You may return when eligible.</div>';
+});
+
+// ================= Character select =================
+const SELECTABLE_KEYS = Object.keys(CHARACTERS).filter(k => !CHARACTERS[k].isBoss);
+let chosenTeamKeys = [];
+
+function showSelectScreen() {
+  const screen = document.getElementById('select-screen');
+  const grid = document.getElementById('select-grid');
+  grid.innerHTML = '';
+
+  for (const key of SELECTABLE_KEYS) {
+    const def = CHARACTERS[key];
+    const card = document.createElement('div');
+    card.className = 'select-card';
+    card.dataset.key = key;
+    const swatch = document.createElement('div');
+    swatch.className = 'select-swatch';
+    swatch.style.background = `#${def.color.toString(16).padStart(6, '0')}`;
+    const name = document.createElement('div');
+    name.className = 'select-card-name';
+    name.textContent = def.name.toUpperCase();
+    card.appendChild(swatch);
+    card.appendChild(name);
+    card.addEventListener('click', () => toggleChoice(key, card));
+    grid.appendChild(card);
+  }
+
+  chosenTeamKeys = [];
+  updateSelectPreview();
+  screen.classList.remove('hidden');
+}
+
+function toggleChoice(key, cardEl) {
+  const idx = chosenTeamKeys.indexOf(key);
+  if (idx !== -1) {
+    chosenTeamKeys.splice(idx, 1);
+    cardEl.classList.remove('chosen');
+  } else if (chosenTeamKeys.length < 2) {
+    chosenTeamKeys.push(key);
+    cardEl.classList.add('chosen');
+  }
+  updateSelectPreview();
+}
+
+function updateSelectPreview() {
+  document.getElementById('select-slot-1').textContent = `SLOT 1: ${chosenTeamKeys[0] ? CHARACTERS[chosenTeamKeys[0]].name.toUpperCase() : '\u2014'}`;
+  document.getElementById('select-slot-2').textContent = `SLOT 2: ${chosenTeamKeys[1] ? CHARACTERS[chosenTeamKeys[1]].name.toUpperCase() : '\u2014'}`;
+  document.getElementById('select-confirm').disabled = chosenTeamKeys.length < 2;
+}
+
+document.getElementById('select-confirm').addEventListener('click', () => {
+  if (chosenTeamKeys.length < 2) return;
+  document.getElementById('select-screen').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  startGame(chosenTeamKeys);
 });
 
 // ================= Core state =================
@@ -85,21 +140,21 @@ function makeFighter(charKey, position, isPlayer) {
   return new Fighter(scene, charKey, def, position, isPlayer);
 }
 
-function startGame() {
+function startGame(teamKeys) {
   initScene();
   arena = buildArena(scene);
   ui = new UI();
   input = new InputState();
   fx = new FX(scene);
 
-  const p1a = makeFighter(PLAYER_TEAM[0], P1_SPAWN, true);
-  const p1b = makeFighter(PLAYER_TEAM[1], P1_SPAWN.clone(), true);
+  const p1a = makeFighter(teamKeys[0], P1_SPAWN, true);
+  const p1b = makeFighter(teamKeys[1], P1_SPAWN.clone(), true);
   playerTeam = new Team([p1a, p1b]);
 
   spawnAITeam(0);
 
   ui.setHint(isTouchDevice
-    ? 'Stick to move · JUMP · L/M/H · SKILL · ULT (full meter) · BLOCK (hold) · EVADE · TAG'
+    ? 'Stick to move (flick up to jump) · L/M/H · SKILL · ULT (full meter) · BLOCK (hold) · EVADE · TAG'
     : '\u2190/\u2192 move · \u2191 jump · A/S/D light/medium/heavy · F skill · G ultimate (full meter) · Space hold block · Shift evade · Q tag');
 
   document.getElementById('restart-btn').addEventListener('click', () => window.location.reload());

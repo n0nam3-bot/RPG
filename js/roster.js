@@ -3,6 +3,50 @@
 // enemy teams.
 
 export const CHARACTERS = {
+  femaleranger: {
+    name: 'The Ranger', health: 95, speed: 5.6,
+    lightDamage: 5, mediumDamage: 8, heavyDamage: 14, skillDamage: 18, ultimateDamage: 31,
+    color: 0x3a7a4a, // used only for the character-select swatch; the model has its own textures
+    modelPath: 'assets/models/female_ranger/Female_Ranger.gltf',
+    modelYOffset: 0, // if she faces the wrong way in-game, try Math.PI here
+    animMap: {
+      idle: 'Idle_FoldArms_Loop',
+      moving: 'Walk_Carry_Loop',
+      jumping: 'NinjaJump_Idle_Loop',
+      light: ['Sword_Regular_A', 'Sword_Regular_B', 'Sword_Regular_C'],
+      medium: 'OverhandThrow',
+      heavy: 'Sword_Heavy_Combo',
+      skill: 'Melee_Hook',
+      ultimate: 'Sword_Heavy_Combo',
+      block: 'Sword_Block',
+      evade: 'Sword_Dash',
+      hitstun: 'Hit_Knockback',
+      ko: 'Hit_Knockback',
+    },
+    archetype: { preferredRange: 1.7, aggression: 0.7, attackChance: 0.65, attackWeights: { light: 0.5, medium: 0.32, heavy: 0.18 }, blockChance: 0.18, evadeChance: 0.16, skillAggression: 0.42, ultimateAggression: 0.5, decisionInterval: 0.27 },
+  },
+  femalepeasant: {
+    name: 'The Wanderer', health: 90, speed: 5.4,
+    lightDamage: 5, mediumDamage: 7, heavyDamage: 13, skillDamage: 17, ultimateDamage: 29,
+    color: 0xa5793a, // used only for the character-select swatch; the model has its own textures
+    modelPath: 'assets/models/female_peasant/Female_Peasant.gltf',
+    modelYOffset: 0,
+    animMap: {
+      idle: 'Idle_No_Loop',
+      moving: 'Walk_Carry_Loop',
+      jumping: 'NinjaJump_Idle_Loop',
+      light: ['Sword_Regular_A', 'Sword_Regular_B', 'Sword_Regular_C'],
+      medium: 'OverhandThrow',
+      heavy: 'Sword_Heavy_Combo',
+      skill: 'Melee_Hook',
+      ultimate: 'Sword_Heavy_Combo',
+      block: 'Sword_Block',
+      evade: 'Sword_Dash',
+      hitstun: 'Hit_Knockback',
+      ko: 'Hit_Knockback',
+    },
+    archetype: { preferredRange: 1.75, aggression: 0.6, attackChance: 0.6, attackWeights: { light: 0.5, medium: 0.3, heavy: 0.2 }, blockChance: 0.22, evadeChance: 0.15, skillAggression: 0.4, ultimateAggression: 0.48, decisionInterval: 0.3 },
+  },
   paladin: {
     name: 'The Paladin', health: 100, speed: 5.2,
     lightDamage: 5, mediumDamage: 8, heavyDamage: 14, skillDamage: 18, ultimateDamage: 32,
