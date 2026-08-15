@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Asset Preview — Depth Tokon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/preview.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+  <div id="app">
+    <div id="viewport-col">
+      <canvas id="preview-canvas"></canvas>
+      <div id="viewport-hud">
+        <select id="model-select">
+          <option value="female_ranger">Female_Ranger.gltf</option>
+          <option value="female_peasant">Female_Peasant.gltf</option>
+          <option value="superhero_female">Superhero_Female_FullBody.gltf (base, no outfit)</option>
+        </select>
+        <div id="now-playing">No clip playing</div>
+        <div id="drag-hint">Drag to orbit · scroll to zoom</div>
+      </div>
+    </div>
+
+    <div id="panel-col">
+      <div class="panel-tabs">
+        <button class="tab-btn active" data-tab="anim-panel">Animations (<span id="anim-count">0</span>)</button>
+        <button class="tab-btn" data-tab="tex-panel">Textures (<span id="tex-count">0</span>)</button>
+      </div>
+
+      <div id="anim-panel" class="tab-panel active">
+        <div class="panel-sub">Click a clip to play it looped. Use + to build a chain and audition how moves flow together.</div>
+        <div id="chain-bar">
+          <span class="chain-label">CHAIN:</span>
+          <div id="chain-list"></div>
+          <button id="chain-play" disabled>▶ Play Chain</button>
+          <button id="chain-clear" disabled>Clear</button>
+        </div>
+        <div id="anim-list"></div>
+      </div>
+
+      <div id="tex-panel" class="tab-panel">
+        <div class="panel-sub">Filenames match the source files exactly, so you can note e.g. "Ranger uses T_Ranger_BaseColor.png". Apply buttons preview live on the model (Base Color / Normal / Roughness only — ORM packed maps are approximated).</div>
+        <div id="material-select-row">
+          <label for="material-select">Target material on model:</label>
+          <select id="material-select"></select>
+        </div>
+        <div id="tex-gallery"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/preview.js"></script>
+</body>
+</html>

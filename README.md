@@ -35,8 +35,11 @@ Cut for scope, documented so you know what's missing on purpose:
 
 ```
 index.html
+preview.html
 css/style.css
+css/preview.css
 js/main.js
+js/preview.js
 js/controls.js
 js/fighter.js
 js/team.js
@@ -64,6 +67,11 @@ assets/models/female_peasant/T_Regular_Female_Dark_BaseColor.png
 assets/models/female_peasant/T_Regular_Female_Normal.png
 assets/models/female_peasant/T_Regular_Female_Roughness.png
 assets/animations/UAL2_Standard.glb
+assets/models/superhero_female/Superhero_Female_FullBody.gltf
+assets/models/superhero_female/Superhero_Female_FullBody.bin
+assets/models/superhero_female/*.png (11 texture files — skin tones, eyes, hair)
+assets/preview_thumbs/*.jpg (19 small generated thumbnails, ~130KB total)
+assets/preview_thumbs/manifest.json
 ```
 
 **The `assets/` folder is new (~84MB total)** — real mesh, texture, and
@@ -122,6 +130,50 @@ referenced by anything.
   team has more total remaining health across both characters wins that
   matchup.
 - **Age gate**: unchanged — confirmation screen blocks entry until 18+.
+
+## Preview tool: audition animations & textures before committing
+
+Open **`preview.html`** directly (separate page, not part of the game) to
+browse everything before deciding what maps to what:
+
+- **3D viewport** with orbit controls (drag to rotate, scroll to zoom) and a
+  dropdown to switch between the three available meshes: `Female_Ranger`,
+  `Female_Peasant`, and the bare `Superhero_Female_FullBody` (no outfit).
+- **Animations tab**: every clip in `UAL2_Standard.glb` — all 43, not just
+  the ones I originally picked — grouped by name prefix (`Sword_`, `Idle_`,
+  `Ninja_`, etc.), each labeled with its exact clip name and duration.
+  Click a name to play it looped on the current model. Click **+** to add it
+  to the **chain builder** at the top instead — build an ordered sequence
+  (e.g. `Sword_Regular_A` → `Sword_Regular_B` → `Sword_Regular_C`) and hit
+  **Play Chain** to watch them actually flow together, which is the real way
+  to judge whether a combo string reads well instead of guessing from names.
+- **Textures tab**: every unique texture file across all three character
+  folders (19 total — skin tones, eyes, hair, both outfits), each shown as a
+  small thumbnail labeled with its **exact source filename** so you can
+  reference it later ("Character 1 uses `T_Ranger_BaseColor.png`"). Pick a
+  target material from the dropdown (populated from whatever's actually on
+  the currently-loaded model) and hit **Apply** on any texture to preview it
+  live on the model — Base Color, Normal, and Roughness maps apply
+  correctly; ORM (occlusion/roughness/metalness packed into one file) is
+  approximated by applying it as both roughness and metalness, since true
+  channel-separated ORM support needs a bit more shader work than a preview
+  tool needs.
+- Thumbnails are small generated JPEGs (~130KB total for all 19), not the
+  full-resolution source PNGs, so the gallery loads fast even though the
+  original textures are multi-megabyte files.
+
+**A real bug I found and fixed while building this**: the `Superhero_Female
+_FullBody.gltf` file from the asset pack itself references a texture named
+`T_Eye_Normal_png.png`, which doesn't exist — the actual file is
+`T_Eye_Normal.png` (missing a rename during the pack's export). I patched
+the `.gltf`'s internal reference directly rather than duplicating the file,
+so that model now loads its eye normal map correctly.
+
+Once you've decided what you want, tell me the specific clip names / chain
+order / texture filenames and I'll update `animMap` and the material
+assignments in `js/roster.js` and `js/fighter.js` to match — I don't have
+a way to watch the preview myself, so your picks from this tool are the
+actual source of truth here.
 
 ## Real assets: The Ranger & The Wanderer
 
