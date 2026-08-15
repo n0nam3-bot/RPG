@@ -1,0 +1,97 @@
+[
+  {
+    "file": "T_Eye_Brown.png",
+    "thumb": "T_Eye_Brown.jpg",
+    "source": "assets/models/superhero_female/T_Eye_Brown.png"
+  },
+  {
+    "file": "T_Eye_Normal.png",
+    "thumb": "T_Eye_Normal.jpg",
+    "source": "assets/models/superhero_female/T_Eye_Normal.png"
+  },
+  {
+    "file": "T_Hair_1_BaseColor.png",
+    "thumb": "T_Hair_1_BaseColor.jpg",
+    "source": "assets/models/superhero_female/T_Hair_1_BaseColor.png"
+  },
+  {
+    "file": "T_Hair_1_Normal.png",
+    "thumb": "T_Hair_1_Normal.jpg",
+    "source": "assets/models/superhero_female/T_Hair_1_Normal.png"
+  },
+  {
+    "file": "T_Hair_2_BaseColor.png",
+    "thumb": "T_Hair_2_BaseColor.jpg",
+    "source": "assets/models/superhero_female/T_Hair_2_BaseColor.png"
+  },
+  {
+    "file": "T_Hair_2_Normal.png",
+    "thumb": "T_Hair_2_Normal.jpg",
+    "source": "assets/models/superhero_female/T_Hair_2_Normal.png"
+  },
+  {
+    "file": "T_Peasant_BaseColor.png",
+    "thumb": "T_Peasant_BaseColor.jpg",
+    "source": "assets/models/female_peasant/T_Peasant_BaseColor.png"
+  },
+  {
+    "file": "T_Peasant_Normal.png",
+    "thumb": "T_Peasant_Normal.jpg",
+    "source": "assets/models/female_peasant/T_Peasant_Normal.png"
+  },
+  {
+    "file": "T_Peasant_ORM.png",
+    "thumb": "T_Peasant_ORM.jpg",
+    "source": "assets/models/female_peasant/T_Peasant_ORM.png"
+  },
+  {
+    "file": "T_Ranger_BaseColor.png",
+    "thumb": "T_Ranger_BaseColor.jpg",
+    "source": "assets/models/female_ranger/T_Ranger_BaseColor.png"
+  },
+  {
+    "file": "T_Ranger_Normal.png",
+    "thumb": "T_Ranger_Normal.jpg",
+    "source": "assets/models/female_ranger/T_Ranger_Normal.png"
+  },
+  {
+    "file": "T_Ranger_ORM.png",
+    "thumb": "T_Ranger_ORM.jpg",
+    "source": "assets/models/female_ranger/T_Ranger_ORM.png"
+  },
+  {
+    "file": "T_Regular_Female_Dark_BaseColor.png",
+    "thumb": "T_Regular_Female_Dark_BaseColor.jpg",
+    "source": "assets/models/female_peasant/T_Regular_Female_Dark_BaseColor.png"
+  },
+  {
+    "file": "T_Regular_Female_Normal.png",
+    "thumb": "T_Regular_Female_Normal.jpg",
+    "source": "assets/models/female_peasant/T_Regular_Female_Normal.png"
+  },
+  {
+    "file": "T_Regular_Female_Roughness.png",
+    "thumb": "T_Regular_Female_Roughness.jpg",
+    "source": "assets/models/female_peasant/T_Regular_Female_Roughness.png"
+  },
+  {
+    "file": "T_Superhero_Female_Dark_BaseColor.png",
+    "thumb": "T_Superhero_Female_Dark_BaseColor.jpg",
+    "source": "assets/models/superhero_female/T_Superhero_Female_Dark_BaseColor.png"
+  },
+  {
+    "file": "T_Superhero_Female_Light_BaseColor.png",
+    "thumb": "T_Superhero_Female_Light_BaseColor.jpg",
+    "source": "assets/models/superhero_female/T_Superhero_Female_Light_BaseColor.png"
+  },
+  {
+    "file": "T_Superhero_Female_Normal.png",
+    "thumb": "T_Superhero_Female_Normal.jpg",
+    "source": "assets/models/superhero_female/T_Superhero_Female_Normal.png"
+  },
+  {
+    "file": "T_Superhero_Female_Roughness.png",
+    "thumb": "T_Superhero_Female_Roughness.jpg",
+    "source": "assets/models/superhero_female/T_Superhero_Female_Roughness.png"
+  }
+]
