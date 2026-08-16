@@ -7,7 +7,10 @@ export const CHARACTERS = {
     name: 'The Ranger', health: 95, speed: 5.6,
     lightDamage: 5, mediumDamage: 8, heavyDamage: 14, skillDamage: 18, ultimateDamage: 31,
     color: 0x3a7a4a, // used only for the character-select swatch; the model has its own textures
-    modelPath: 'assets/models/female_ranger/Female_Ranger.gltf',
+    modelParts: [
+      'assets/models/female_ranger/Female_Ranger.gltf',
+      'assets/models/superhero_female/Superhero_Female_FullBody.gltf', // gives her a head/hair/eyes — the outfit mesh alone has none
+    ],
     modelYOffset: 0, // if she faces the wrong way in-game, try Math.PI here
     animMap: {
       idle: 'Idle_FoldArms_Loop',
@@ -29,7 +32,10 @@ export const CHARACTERS = {
     name: 'The Wanderer', health: 90, speed: 5.4,
     lightDamage: 5, mediumDamage: 7, heavyDamage: 13, skillDamage: 17, ultimateDamage: 29,
     color: 0xa5793a, // used only for the character-select swatch; the model has its own textures
-    modelPath: 'assets/models/female_peasant/Female_Peasant.gltf',
+    modelParts: [
+      'assets/models/female_peasant/Female_Peasant.gltf',
+      'assets/models/superhero_female/Superhero_Female_FullBody.gltf', // gives her a head/hair/eyes — the outfit mesh alone has none
+    ],
     modelYOffset: 0,
     animMap: {
       idle: 'Idle_No_Loop',

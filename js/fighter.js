@@ -45,7 +45,8 @@ export class Fighter {
     this.name = def.name;
     this.isPlayer = isPlayer;
     this.isBoss = !!def.isBoss;
-    this.useModel = !!def.modelPath;
+    this.modelParts = def.modelParts ?? (def.modelPath ? [def.modelPath] : null);
+    this.useModel = !!this.modelParts;
     this.modelLoaded = false;
 
     this.maxHealth = def.health;
@@ -158,32 +159,43 @@ export class Fighter {
 
   async _loadModel() {
     try {
-      const [gltf, animClips] = await Promise.all([
-        loadModel(this.def.modelPath),
+      const [gltfResults, animClips] = await Promise.all([
+        Promise.all(this.modelParts.map((p) => loadModel(p))),
         loadAnimationLibrary(),
       ]);
 
-      const model = gltf.scene;
-      model.scale.setScalar(this.scale);
-      model.rotation.y = this.def.modelYOffset ?? 0;
-      model.traverse((o) => {
-        if (o.isMesh) {
-          o.frustumCulled = false;
-          if (o.material) o.material.needsUpdate = true;
-        }
-      });
-      this.group.add(model);
-      this.modelRoot = model;
-
-      this.mixer = new THREE.AnimationMixer(model);
+      // Each part is its OWN separately-loaded scene graph — even though
+      // the skeletons share bone names (confirmed compatible), they are
+      // different Object3D instances, so a single AnimationMixer bound to
+      // one part's skeleton will NOT move another part's skeleton. Instead
+      // we run one mixer per part and play the same clip on all of them in
+      // parallel, which keeps them visually in sync since they're driven by
+      // identical keyframe data on structurally-identical skeletons.
+      this.mixers = [];
+      this.currentActions = [];
       this.clips = {};
       for (const clip of animClips) this.clips[clip.name] = clip;
-      this.currentAction = null;
+
+      for (const gltf of gltfResults) {
+        const part = gltf.scene;
+        part.scale.setScalar(this.scale);
+        part.rotation.y = this.def.modelYOffset ?? 0;
+        part.traverse((o) => {
+          if (o.isMesh) {
+            o.frustumCulled = false;
+            if (o.material) o.material.needsUpdate = true;
+          }
+        });
+        this.group.add(part);
+        this.mixers.push(new THREE.AnimationMixer(part));
+      }
+      this.modelRoot = gltfResults[0].scene;
+
       this.currentClipName = null;
       this.modelLoaded = true;
       this._playClip(this._resolveIdleClip(), true);
     } catch (err) {
-      console.error(`Failed to load model for ${this.name} (${this.def.modelPath}):`, err);
+      console.error(`Failed to load model for ${this.name} (${this.modelParts}):`, err);
       // Fail safe: fall back to the primitive mesh so a missing/bad asset
       // path doesn't leave the fighter invisible for the whole match.
       this.useModel = false;
@@ -196,24 +208,27 @@ export class Fighter {
   }
 
   _playClip(name, loop = true, timeScale = 1, fadeDuration = 0.1) {
-    if (!this.mixer || !this.clips[name]) return;
+    if (!this.mixers || this.mixers.length === 0 || !this.clips[name]) return;
     if (name === this.currentClipName) {
       // Same clip already playing/queued — just retarget speed, don't restart.
-      if (this.currentAction) this.currentAction.timeScale = timeScale;
+      for (const action of this.currentActions) action.timeScale = timeScale;
       return;
     }
     const clip = this.clips[name];
-    const nextAction = this.mixer.clipAction(clip);
-    nextAction.reset();
-    nextAction.timeScale = timeScale;
-    nextAction.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
-    nextAction.clampWhenFinished = !loop;
-    nextAction.fadeIn(fadeDuration);
-    nextAction.play();
-    if (this.currentAction && this.currentAction !== nextAction) {
-      this.currentAction.fadeOut(fadeDuration);
+    const nextActions = this.mixers.map((mixer) => {
+      const action = mixer.clipAction(clip);
+      action.reset();
+      action.timeScale = timeScale;
+      action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+      action.clampWhenFinished = !loop;
+      action.fadeIn(fadeDuration);
+      action.play();
+      return action;
+    });
+    for (const prevAction of this.currentActions) {
+      if (!nextActions.includes(prevAction)) prevAction.fadeOut(fadeDuration);
     }
-    this.currentAction = nextAction;
+    this.currentActions = nextActions;
     this.currentClipName = name;
   }
 
@@ -462,7 +477,7 @@ export class Fighter {
     if (this.state === 'ko') {
       this.group.position.y = Math.max(this.group.position.y - dt * 1.2, this.groundY - 0.4);
       if (this.useModel && this.modelLoaded) {
-        this.mixer.update(dt);
+        for (const mixer of this.mixers) mixer.update(dt);
         this._updateModelAnimation();
       } else if (this.bodyMesh) {
         this.bodyMesh.rotation.z = THREE.MathUtils.lerp(this.bodyMesh.rotation.z, Math.PI / 2, dt * 4);
@@ -528,7 +543,7 @@ export class Fighter {
 
     if (this.useModel) {
       if (this.modelLoaded) {
-        this.mixer.update(dt);
+        for (const mixer of this.mixers) mixer.update(dt);
         this._updateModelAnimation();
       }
       // Model orientation is handled by group.rotation.y (faceToward), so

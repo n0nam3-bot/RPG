@@ -48,16 +48,18 @@ window.addEventListener('resize', resize);
 
 // ================= Loading state =================
 const loader = new GLTFLoader();
-let currentModel = null;
-let currentMixer = null;
-let currentAction = null;
+let currentParts = []; // loaded scene roots, for cleanup
+let currentMixers = []; // one per part, kept in sync by playing the same clip
+let currentActions = [];
 let animClips = {};
 let materialsBySlotName = {};
 
+const BASE_BODY_PATH = MODEL_PATHS.superhero_female;
+
 function clearModel() {
-  if (currentModel) {
-    scene.remove(currentModel);
-    currentModel.traverse((o) => {
+  for (const part of currentParts) {
+    scene.remove(part);
+    part.traverse((o) => {
       if (o.isMesh) {
         o.geometry?.dispose();
         if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
@@ -65,9 +67,9 @@ function clearModel() {
       }
     });
   }
-  currentModel = null;
-  currentMixer = null;
-  currentAction = null;
+  currentParts = [];
+  currentMixers = [];
+  currentActions = [];
   materialsBySlotName = {};
 }
 
@@ -86,23 +88,33 @@ function loadModel(path) {
 async function switchModel(key) {
   document.getElementById('now-playing').textContent = 'Loading model\u2026';
   clearModel();
+
+  const layerBody = document.getElementById('layer-body-toggle').checked;
+  const paths = [MODEL_PATHS[key]];
+  // The outfit meshes have no head/hair/eyes by design (per the pack's own
+  // README) — layer the base body underneath to supply them, same fix as
+  // the actual game. Skip this for the base mesh itself (nothing to layer).
+  if (key !== 'superhero_female' && layerBody) paths.push(BASE_BODY_PATH);
+
   try {
-    const gltf = await loadModel(MODEL_PATHS[key]);
-    const model = gltf.scene;
-    model.traverse((o) => {
-      if (o.isMesh) {
-        o.frustumCulled = false;
-        if (o.material) {
-          const mats = Array.isArray(o.material) ? o.material : [o.material];
-          for (const m of mats) {
-            if (m.name) materialsBySlotName[m.name] = m;
+    const gltfs = await Promise.all(paths.map(loadModel));
+    for (const gltf of gltfs) {
+      const part = gltf.scene;
+      part.traverse((o) => {
+        if (o.isMesh) {
+          o.frustumCulled = false;
+          if (o.material) {
+            const mats = Array.isArray(o.material) ? o.material : [o.material];
+            for (const m of mats) {
+              if (m.name) materialsBySlotName[m.name] = m;
+            }
           }
         }
-      }
-    });
-    scene.add(model);
-    currentModel = model;
-    currentMixer = new THREE.AnimationMixer(model);
+      });
+      scene.add(part);
+      currentParts.push(part);
+      currentMixers.push(new THREE.AnimationMixer(part));
+    }
     populateMaterialDropdown();
     document.getElementById('now-playing').textContent = 'Idle (no clip playing)';
   } catch (err) {
@@ -186,19 +198,24 @@ function setPlayingHighlight(name) {
 }
 
 function playClip(name, loop) {
-  if (!currentMixer || !animClips[name]) return;
+  if (currentMixers.length === 0 || !animClips[name]) return;
   const clip = animClips[name];
-  const action = currentMixer.clipAction(clip);
-  action.reset();
-  action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
-  action.clampWhenFinished = !loop;
-  action.fadeIn(0.15);
-  action.play();
-  if (currentAction && currentAction !== action) currentAction.fadeOut(0.15);
-  currentAction = action;
+  const nextActions = currentMixers.map((mixer) => {
+    const action = mixer.clipAction(clip);
+    action.reset();
+    action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+    action.clampWhenFinished = !loop;
+    action.fadeIn(0.15);
+    action.play();
+    return action;
+  });
+  for (const prev of currentActions) {
+    if (!nextActions.includes(prev)) prev.fadeOut(0.15);
+  }
+  currentActions = nextActions;
   document.getElementById('now-playing').textContent = `Playing: ${name} (${clip.duration.toFixed(2)}s)`;
   setPlayingHighlight(name);
-  return action;
+  return nextActions[0]; // first mixer's action drives the 'finished' event for chaining
 }
 
 // ===== Chain builder =====
@@ -234,7 +251,8 @@ function renderChain() {
 }
 
 function playChain() {
-  if (chain.length === 0 || !currentMixer) return;
+  if (chain.length === 0 || currentMixers.length === 0) return;
+  const driverMixer = currentMixers[0];
   let i = 0;
   const playNext = () => {
     if (i >= chain.length) return;
@@ -245,10 +263,10 @@ function playChain() {
     if (!isLast && action) {
       const onFinished = (e) => {
         if (e.action !== action) return;
-        currentMixer.removeEventListener('finished', onFinished);
+        driverMixer.removeEventListener('finished', onFinished);
         playNext();
       };
-      currentMixer.addEventListener('finished', onFinished);
+      driverMixer.addEventListener('finished', onFinished);
     }
   };
   playNext();
@@ -362,6 +380,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // ================= Model select =================
 document.getElementById('model-select').addEventListener('change', (e) => switchModel(e.target.value));
+document.getElementById('layer-body-toggle').addEventListener('change', () => switchModel(document.getElementById('model-select').value));
 
 // ================= Boot =================
 async function init() {
@@ -379,7 +398,7 @@ init();
 function loop() {
   requestAnimationFrame(loop);
   const dt = Math.min(0.05, clockDelta());
-  if (currentMixer) currentMixer.update(dt);
+  if (currentMixers.length) for (const m of currentMixers) m.update(dt);
   controls.update();
   renderer.render(scene, camera);
 }
