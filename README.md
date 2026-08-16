@@ -67,6 +67,11 @@ assets/models/female_peasant/T_Regular_Female_Dark_BaseColor.png
 assets/models/female_peasant/T_Regular_Female_Normal.png
 assets/models/female_peasant/T_Regular_Female_Roughness.png
 assets/animations/UAL2_Standard.glb
+assets/animations/UAL1_Standard.glb
+assets/models/hair/Hair_Long.gltf
+assets/models/hair/Hair_Long.bin
+assets/models/hair/T_Hair_2_BaseColor.png
+assets/models/hair/T_Hair_2_Normal.png
 assets/models/superhero_female/Superhero_Female_FullBody.gltf
 assets/models/superhero_female/Superhero_Female_FullBody.bin
 assets/models/superhero_female/*.png (11 texture files — skin tones, eyes, hair)
@@ -141,11 +146,12 @@ browse everything before deciding what maps to what:
   base body" checkbox** (on by default) so you can see exactly what the
   game now does — see "Why she had no head" below — and compare it against
   the outfit alone.
-- **Animations tab**: every clip that actually exists in `UAL2_Standard.glb`
-  — all 43 — grouped by name prefix, each labeled with its exact clip name
-  and duration. Click to play looped. Click **+** to add it to the **chain
-  builder** and hit **Play Chain** to watch multiple clips actually flow
-  together, instead of guessing from names.
+- **Animations tab**: every clip from both `UAL2_Standard.glb` and
+  `UAL1_Standard.glb` merged — 85 unique clips — grouped by name prefix,
+  each labeled with its exact clip name and duration. Click to play looped.
+  Click **+** to add it to the **chain builder** and hit **Play Chain** to
+  watch multiple clips actually flow together, instead of guessing from
+  names.
 - **Textures tab**: all 19 unique texture files across every character
   folder, each a small thumbnail labeled with its **exact source filename**.
   Pick a target material from the dropdown and hit **Apply** to preview it
@@ -154,62 +160,77 @@ browse everything before deciding what maps to what:
   roughness and metalness, since true channel separation needs more than a
   preview tool.
 
-## Why there are 43 animations, not 130+
+## Animations: 85 clips now, and the "zombie" walk is fixed
 
-I checked — the *Universal Animation Library 2 [Standard]* zip you uploaded
-contains exactly 43 unique clips (in `UAL2_Standard.glb`; the `_RM` file has
-the same 43, just with root motion baked in instead of in-place). The pack's
-own `README.txt` confirms this is the complete "Standard" library and that
-the separate `Mannequin_F.glb` deliberately ships **without** any
-animations, telling you to pull them from this same 43-clip file. There's no
-larger set hidden anywhere in what you gave me.
+You uploaded the *Universal Animation Library* (v1, without the "2") this
+round — I checked it the same way as before: same 67-node `Armature`
+skeleton, fully compatible, 43 more clips. Combined with v2's 43 (minus one
+duplicate `A_TPose` shared by both), that's **85 unique clips**, all
+browsable in `preview.html` now. Both `.glb` files load and merge
+automatically in the game too (`js/fighter.js`'s `loadAnimationLibrary()`).
 
-The 130+ figure is very likely the *combined* total across this pack **and**
-the original *Universal Animation Library* (v1, without the "2") — a
-separate itch.io page you linked earlier but never actually uploaded. If you
-download and upload that one too, I can merge its clips in alongside these
-43 — more importantly, v1 may well have an actual walk/run cycle, which
-brings up the next issue:
+Critically, v1 has things v2 didn't: `Walk_Loop` (an actual walk cycle),
+`Roll`, `Death01`, `Idle_Loop`, `Jump_Start/Loop/Land`. I remapped both
+characters to use these instead of the awkward placeholders from before:
 
-**On the "zombie" walk**: you're not wrong that it looks stiff. Of the 43
-clips available, there's no plain "Walk" or "Run" cycle — the only
-locomotion loop is `Walk_Carry_Loop`, which is animated with the arms held
-as if carrying something, since that's what it was authored for. I mapped
-`moving` to it anyway because it was the closest available option, but it's
-a real compromise, not a bug — check it yourself in the preview tool's
-Animations tab and you'll see the same stiffness on any model. The original
-*Universal Animation Library* pack is the most likely place a proper walk
-cycle actually lives.
+| Move | Old (v2 only) | New |
+|---|---|---|
+| Walking | `Walk_Carry_Loop` (arms held like carrying something — the "zombie" look) | `Walk_Loop` |
+| Idle | `Idle_FoldArms_Loop` / `Idle_No_Loop` | `Idle_Loop` |
+| Jump | `NinjaJump_Idle_Loop` | `Jump_Loop` |
+| Evade | `Sword_Dash` | `Roll` |
+| K.O. | `Hit_Knockback` (reused) | `Death01` |
 
-## Why she had no head (found and fixed)
+The 130+ figure you originally remembered is still probably a Pro-tier or
+some other combined total I don't have visibility into, but between the two
+Standard packs you've now given me, 85 is the real number available.
 
-The outfit meshes (`Female_Ranger.gltf`, `Female_Peasant.gltf`) genuinely
-don't include a head — this isn't a loading bug, it's how the pack is
-designed. Its own `Readme.txt` says outfits are meant to be combined with
-the *Universal Base Characters* kit: **"When using the clothing, only the
-head of the model is required. Using the full body will result in
-clipping."**
+## Why she had no head — and why it's now fixed differently for each of them
 
-The fix: both characters now load **two layered model parts** instead of
-one — the outfit, plus the full `Superhero_Female_FullBody` mesh underneath
-for the head/hair/eyes (`modelParts` in `js/roster.js`). This required a
-real architecture change in `js/fighter.js`: two separately-loaded glTF
-files each bring their own skeleton (same bone *names*, but different
-object instances), so a single animation mixer bound to one skeleton
-wouldn't move the other. Fighters now run one `AnimationMixer` per loaded
-part and play the same clip on all of them in parallel, which keeps
-everything visually in sync since they're driven by identical keyframe
+The outfit meshes genuinely ship with no head by design — the pack's own
+`Readme.txt` says so: outfits pair with the *Universal Base Characters* kit,
+and using the full base body under them risks clipping. But investigating
+your screenshots turned up something I'd missed the first time: **the two
+outfits aren't built the same way.**
+
+- **`Female_Ranger.gltf`** already includes her own bundled
+  `Female_Ranger_Head_Hood` mesh — she never actually needed the base body
+  layered under her. I was doing it anyway, for no benefit and unnecessary
+  clipping risk. **Fixed**: she now loads standalone, just her own outfit
+  file, nothing layered.
+- **`Female_Peasant.gltf`** has zero head geometry and no hood option — she
+  genuinely needs the base body layered in, there's no alternative. This is
+  also very likely the direct cause of what you saw in the screenshots: the
+  bald head and the patchy/pale-skin look on her arms and midriff are the
+  base body's own skin showing through gaps where her outfit doesn't fully
+  cover it — exactly the clipping the pack's README warns about, not a
+  texture bug. I checked her actual `T_Peasant_BaseColor.png` file directly
+  and it's a normal, correctly-formed texture; the mismatch you're seeing is
+  a geometry/coverage issue, not a broken image.
+- **Hair, fixed for real this time**: neither the base body nor either
+  outfit includes hair geometry at all — I'd missed this earlier. The base
+  character kit ships hairstyles as fully separate, head-bone-rigged glTF
+  files. I added `Hair_Long` as a third layered part for The Wanderer (who
+  needs it — she has no hood). The Ranger's hood already covers her head, so
+  I didn't add hair under it; if her hood turns out to have a visible gap
+  that needs hair peeking through, tell me and I'll add it for her too.
+
+Loading 2-3 separately-authored glTF files and keeping them animated
+together required a real architecture change in `js/fighter.js`: each file
+brings its *own* skeleton instance (same bone names, but different objects),
+so one `AnimationMixer` bound to one skeleton won't move another. Fighters
+now run one mixer per loaded part and play the same clip on all of them in
+parallel — they stay in sync because they're driven by identical keyframe
 data on structurally-identical skeletons.
 
-**The trade-off, straight from the pack's own warning**: since the full
-body renders underneath instead of *just* the head, there's a real chance
-of minor clothing/skin clipping in areas the outfit is supposed to fully
-cover — I can't see this myself to know how bad it looks. Check it in
-`preview.html`. The Ranger outfit also ships a purpose-built
-`Female_Ranger_Head_Hood.gltf` (found while investigating this) which would
-fit correctly without that clipping risk, but I didn't wire it in blind — if
-the current fix looks wrong for her specifically, tell me and I'll swap her
-to the hood piece instead of the full base body.
+**The Wanderer's clipping risk is still real and unresolved** — I have no
+way to render her and check how bad it looks with this fix. `preview.html`
+now has independent "Layer base body" and "Layer hair" checkboxes so you
+can inspect this yourself. If the clipping is bad enough to be distracting,
+the honest options are: live with it (it's the only way she gets a head at
+all from these packs), or source/request a dedicated head/hair piece
+built specifically for the Peasant outfit, which doesn't exist in what
+you've uploaded so far.
 
 **A separate real bug I found and fixed along the way**: the base body's
 own `.gltf` file references a texture named `T_Eye_Normal_png.png`, which
@@ -224,15 +245,18 @@ mix-and-match pieces — not implemented yet, and I want to be upfront that
 this is a distinctly bigger feature than the texture/animation preview
 already built. It's genuinely possible: the outfit pack ships true modular
 pieces (`Female_Ranger_Body/Arms/Legs/Feet/Head_Hood/Acc_Pauldrons.gltf`
-individually, not just the pre-combined `Female_Ranger.gltf`), and the base
-character kit separately ships swappable hairstyles
-(`Hair_Buns/Buzzed/Long/SimpleParted`, plus `Eyebrows_Female/Regular`) as
-their own glTF files with their own textures. None of that is wired into
-`preview.html` or the game yet — right now you can compare *textures* on
-whatever single model is loaded, but not attach/detach independent hair or
-body-part meshes. If you want that, say so and I'll build a proper
-part-picker into the preview tool (checkboxes per slot: body/arms/legs/
-feet/head/hair/eyebrows, each populated from the real files) before wiring
+individually, not just the pre-combined `Female_Ranger.gltf` — note Peasant
+doesn't have this option since her modular pieces are Body/Arms/Legs/Feet
+only, no head variant exists for her), and the base character kit
+separately ships 6 more hairstyles beyond `Hair_Long`
+(`Hair_Buns/Buzzed/BuzzedFemale/SimpleParted/Beard`, plus
+`Eyebrows_Female/Regular`) as their own glTF files. None of that is wired
+into `preview.html` or the game yet — right now you can compare *textures*
+on whatever single model is loaded, and toggle base-body/hair on or off,
+but not attach/detach independent hair styles or body-part meshes. If you
+want that, say so and I'll build a proper part-picker into the preview tool
+(checkboxes per slot: body/arms/legs/feet/head/hair/eyebrows, each
+populated from the real files) before wiring
 final choices into the game — that's the right next step, but it's its own
 chunk of work, not a quick add-on to what's here.
 
@@ -241,16 +265,18 @@ chunk of work, not a quick add-on to what's here.
 Two new selectable characters use actual assets from the packs you
 uploaded, loaded via Three.js's `GLTFLoader` instead of primitive shapes:
 
-- **Mesh + textures**: `Female_Ranger` and `Female_Peasant` outfits, layered
-  with the base body as described above.
-- **Animations**: shared `UAL2_Standard.glb` library, loaded once for every
-  model-based fighter.
+- **Mesh + textures**: `Female_Ranger` (standalone — she has her own
+  bundled head) and `Female_Peasant` (layered with the base body + hair, per
+  "Why she had no head" above).
+- **Animations**: both `UAL2_Standard.glb` and `UAL1_Standard.glb` merged
+  into one shared library, loaded once for every model-based fighter.
 - **Move mapping** (`animMap` in `js/roster.js`): light attacks cycle
   through `Sword_Regular_A/B/C`, medium uses `OverhandThrow`, heavy/ultimate
   use `Sword_Heavy_Combo`, skill uses `Melee_Hook`, block holds
-  `Sword_Block`, evade plays `Sword_Dash`, getting hit plays
-  `Hit_Knockback`, jump uses `NinjaJump_*`. Playback speed auto-scales so
-  each attack clip finishes right as the move's hitbox window ends.
+  `Sword_Block`, evade plays `Roll`, getting hit plays `Hit_Chest`, K.O.
+  plays `Death01`, walking uses `Walk_Loop`, jump uses `Jump_Loop`. Playback
+  speed auto-scales so each attack clip finishes right as the move's hitbox
+  window ends.
 - **Fallback safety**: if any model part fails to load, that fighter falls
   back to the primitive-mesh look instead of being invisible — check the
   browser console if that happens.
