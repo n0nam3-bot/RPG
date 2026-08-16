@@ -7,7 +7,11 @@ const MODEL_PATHS = {
   female_peasant: 'assets/models/female_peasant/Female_Peasant.gltf',
   superhero_female: 'assets/models/superhero_female/Superhero_Female_FullBody.gltf',
 };
-const ANIMATION_LIBRARY_PATH = 'assets/animations/UAL2_Standard.glb';
+const HAIR_PATH = 'assets/models/hair/Hair_Long.gltf';
+const ANIMATION_LIBRARY_PATHS = [
+  'assets/animations/UAL2_Standard.glb',
+  'assets/animations/UAL1_Standard.glb',
+];
 const THUMBS_MANIFEST_PATH = 'assets/preview_thumbs/manifest.json';
 
 // ================= Scene setup =================
@@ -74,9 +78,12 @@ function clearModel() {
 }
 
 async function loadAnimationLibrary() {
-  return new Promise((resolve, reject) => {
-    loader.load(ANIMATION_LIBRARY_PATH, (gltf) => resolve(gltf.animations), undefined, reject);
-  });
+  const arrays = await Promise.all(
+    ANIMATION_LIBRARY_PATHS.map((path) => new Promise((resolve, reject) => {
+      loader.load(path, (gltf) => resolve(gltf.animations), undefined, reject);
+    }))
+  );
+  return arrays.flat();
 }
 
 function loadModel(path) {
@@ -90,11 +97,13 @@ async function switchModel(key) {
   clearModel();
 
   const layerBody = document.getElementById('layer-body-toggle').checked;
+  const layerHair = document.getElementById('layer-hair-toggle').checked;
   const paths = [MODEL_PATHS[key]];
   // The outfit meshes have no head/hair/eyes by design (per the pack's own
   // README) — layer the base body underneath to supply them, same fix as
   // the actual game. Skip this for the base mesh itself (nothing to layer).
   if (key !== 'superhero_female' && layerBody) paths.push(BASE_BODY_PATH);
+  if (layerHair) paths.push(HAIR_PATH);
 
   try {
     const gltfs = await Promise.all(paths.map(loadModel));
@@ -381,6 +390,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // ================= Model select =================
 document.getElementById('model-select').addEventListener('change', (e) => switchModel(e.target.value));
 document.getElementById('layer-body-toggle').addEventListener('change', () => switchModel(document.getElementById('model-select').value));
+document.getElementById('layer-hair-toggle').addEventListener('change', () => switchModel(document.getElementById('model-select').value));
 
 // ================= Boot =================
 async function init() {
@@ -391,7 +401,8 @@ async function init() {
     buildTextureGallery(),
   ]);
   for (const clip of clips) animClips[clip.name] = clip;
-  buildAnimList(clips);
+  const uniqueClips = Object.values(animClips); // dedupes e.g. A_TPose, which exists in both libraries
+  buildAnimList(uniqueClips);
 }
 init();
 

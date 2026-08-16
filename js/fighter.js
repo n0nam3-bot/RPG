@@ -20,13 +20,18 @@ const JUMP_VELOCITY = 6.2;
 // and the animation library is fetched/parsed exactly once, not per-fighter) =====
 const _loader = new GLTFLoader();
 let _animLibraryPromise = null;
-const ANIMATION_LIBRARY_PATH = 'assets/animations/UAL2_Standard.glb';
+const ANIMATION_LIBRARY_PATHS = [
+  'assets/animations/UAL2_Standard.glb',
+  'assets/animations/UAL1_Standard.glb',
+];
 
 function loadAnimationLibrary() {
   if (!_animLibraryPromise) {
-    _animLibraryPromise = new Promise((resolve, reject) => {
-      _loader.load(ANIMATION_LIBRARY_PATH, (gltf) => resolve(gltf.animations), undefined, reject);
-    });
+    _animLibraryPromise = Promise.all(
+      ANIMATION_LIBRARY_PATHS.map((path) => new Promise((resolve, reject) => {
+        _loader.load(path, (gltf) => resolve(gltf.animations), undefined, reject);
+      }))
+    ).then((clipArrays) => clipArrays.flat());
   }
   return _animLibraryPromise;
 }

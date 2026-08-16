@@ -8,23 +8,22 @@ export const CHARACTERS = {
     lightDamage: 5, mediumDamage: 8, heavyDamage: 14, skillDamage: 18, ultimateDamage: 31,
     color: 0x3a7a4a, // used only for the character-select swatch; the model has its own textures
     modelParts: [
-      'assets/models/female_ranger/Female_Ranger.gltf',
-      'assets/models/superhero_female/Superhero_Female_FullBody.gltf', // gives her a head/hair/eyes — the outfit mesh alone has none
+      'assets/models/female_ranger/Female_Ranger.gltf', // already includes her own head/hood — no layering needed
     ],
     modelYOffset: 0, // if she faces the wrong way in-game, try Math.PI here
     animMap: {
-      idle: 'Idle_FoldArms_Loop',
-      moving: 'Walk_Carry_Loop',
-      jumping: 'NinjaJump_Idle_Loop',
+      idle: 'Idle_Loop',
+      moving: 'Walk_Loop',
+      jumping: 'Jump_Loop',
       light: ['Sword_Regular_A', 'Sword_Regular_B', 'Sword_Regular_C'],
       medium: 'OverhandThrow',
       heavy: 'Sword_Heavy_Combo',
       skill: 'Melee_Hook',
       ultimate: 'Sword_Heavy_Combo',
       block: 'Sword_Block',
-      evade: 'Sword_Dash',
-      hitstun: 'Hit_Knockback',
-      ko: 'Hit_Knockback',
+      evade: 'Roll',
+      hitstun: 'Hit_Chest',
+      ko: 'Death01',
     },
     archetype: { preferredRange: 1.7, aggression: 0.7, attackChance: 0.65, attackWeights: { light: 0.5, medium: 0.32, heavy: 0.18 }, blockChance: 0.18, evadeChance: 0.16, skillAggression: 0.42, ultimateAggression: 0.5, decisionInterval: 0.27 },
   },
@@ -34,22 +33,23 @@ export const CHARACTERS = {
     color: 0xa5793a, // used only for the character-select swatch; the model has its own textures
     modelParts: [
       'assets/models/female_peasant/Female_Peasant.gltf',
-      'assets/models/superhero_female/Superhero_Female_FullBody.gltf', // gives her a head/hair/eyes — the outfit mesh alone has none
+      'assets/models/superhero_female/Superhero_Female_FullBody.gltf', // she has zero head geometry of her own — this is the only way to give her one. Some clipping is possible per the asset pack's own warning; see README.
+      'assets/models/hair/Hair_Long.gltf',
     ],
     modelYOffset: 0,
     animMap: {
-      idle: 'Idle_No_Loop',
-      moving: 'Walk_Carry_Loop',
-      jumping: 'NinjaJump_Idle_Loop',
+      idle: 'Idle_Loop',
+      moving: 'Walk_Loop',
+      jumping: 'Jump_Loop',
       light: ['Sword_Regular_A', 'Sword_Regular_B', 'Sword_Regular_C'],
       medium: 'OverhandThrow',
       heavy: 'Sword_Heavy_Combo',
       skill: 'Melee_Hook',
       ultimate: 'Sword_Heavy_Combo',
       block: 'Sword_Block',
-      evade: 'Sword_Dash',
-      hitstun: 'Hit_Knockback',
-      ko: 'Hit_Knockback',
+      evade: 'Roll',
+      hitstun: 'Hit_Chest',
+      ko: 'Death01',
     },
     archetype: { preferredRange: 1.75, aggression: 0.6, attackChance: 0.6, attackWeights: { light: 0.5, medium: 0.3, heavy: 0.2 }, blockChance: 0.22, evadeChance: 0.15, skillAggression: 0.4, ultimateAggression: 0.48, decisionInterval: 0.3 },
   },
